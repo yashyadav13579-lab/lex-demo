@@ -1,0 +1,703 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CLIENT
+  ADVOCATE
+  FIRM_ADMIN
+  FIRM_MEMBER
+  REVIEWER
+  ADMIN
+  COMPLIANCE_ADMIN
+  SUPER_ADMIN
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+  FLAGGED
+}
+
+enum MatterStatus {
+  DRAFT
+  OPEN
+  PAUSED
+  CLOSED
+  ARCHIVED
+}
+
+enum DraftStatus {
+  DRAFTING
+  NEEDS_REVIEW
+  CHANGES_REQUESTED
+  APPROVED
+  LOCKED
+  EXPORTED
+}
+
+enum IncidentStatus {
+  OPEN
+  ACKNOWLEDGED
+  CLOSED
+}
+
+enum AvailabilityMode {
+  AVAILABLE
+  BUSY
+  AWAY
+  OFFLINE
+}
+
+enum ComplaintStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  REJECTED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+enum ConnectionStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  BLOCKED
+}
+
+enum CollaborationType {
+  DRAFTING_SUPPORT
+  APPEARANCE
+  LOCAL_COUNSEL
+  PANEL_INVITE
+}
+
+enum PanelType {
+  PRACTICE
+  JURISDICTION
+  EMERGENCY
+  CHAMBER
+  PRO_BONO
+  RESEARCH
+}
+
+enum PanelRole {
+  OWNER
+  MODERATOR
+  MEMBER
+}
+
+enum EvidenceSource {
+  CLIENT_UPLOAD
+  ADVOCATE_UPLOAD
+  SYSTEM_GENERATED
+  IMPORTED
+}
+
+enum AccessEventType {
+  VIEW
+  DOWNLOAD
+  EXPORT
+  SHARE
+}
+
+enum ReviewDecision {
+  APPROVED
+  CHANGES_REQUESTED
+  REJECTED
+}
+
+enum ThreadType {
+  DIRECT
+  MATTER
+  PANEL
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  BLOCKED
+}
+
+enum AuditAction {
+  VERIFICATION_DECISION
+  PROFILE_UPDATE
+  MATTER_ASSIGNMENT_CHANGE
+  EVIDENCE_EXPORT
+  DRAFT_APPROVAL
+  SOS_ACCESS
+  ADMIN_ACTION
+  SUBSCRIPTION_CHANGE
+  CORRECTION_DECISION
+  LAWFUL_PROCESS_ACTION
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  passwordHash   String?
+  name           String
+  phone          String?
+  role           Role      @default(CLIENT)
+  status         String    @default("active")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  lastLoginAt    DateTime?
+  firmMemberships FirmMembership[]
+  advocateProfile AdvocateProfile?
+  clientProfile   ClientProfile?
+  availability    LawyerAvailability?
+  verificationRequests VerificationRequest[]
+  // matters owned handled via assignments/primaryAdvocate/client relations
+  draftDocuments  DraftDocument[]
+  messages        Message[] @relation("UserMessages")
+  connectionsSent Connection[] @relation("ConnectionsSent")
+  connectionsReceived Connection[] @relation("ConnectionsReceived")
+  subscriptions   Subscription[]
+  auditLogs       AuditLog[] @relation("AuditActor")
+  sosIncidents    SOSIncident[]
+  complaintsFiled Complaint[] @relation("ComplaintsFiled")
+  complaintsAgainst Complaint[] @relation("ComplaintsAgainst")
+  correctionRequests ProfileCorrectionRequest[]
+  lawfulProcessRequests LawfulProcessRequest[]
+  panelsCreated   Panel[]   @relation("PanelsCreated")
+  panelMemberships PanelMembership[]
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?
+  access_token       String?
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationRequest {
+  id         String              @id @default(cuid())
+  userId     String
+  status     VerificationStatus  @default(PENDING)
+  submittedAt DateTime           @default(now())
+  reviewedAt DateTime?
+  reviewerId String?
+  notes      String?
+
+  user     User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewer User? @relation("VerificationReviewer", fields: [reviewerId], references: [id])
+  documents VerificationDocument[]
+}
+
+model VerificationDocument {
+  id                    String   @id @default(cuid())
+  verificationRequestId String
+  type                  String
+  url                   String
+  uploadedAt            DateTime @default(now())
+
+  request VerificationRequest @relation(fields: [verificationRequestId], references: [id], onDelete: Cascade)
+}
+
+model AdvocateProfile {
+  id                String             @id @default(cuid())
+  userId            String             @unique
+  verificationStatus VerificationStatus @default(PENDING)
+  barNumber         String?
+  barCouncil        String?
+  jurisdictions     String[]           @default([])
+  practiceAreas     String[]           @default([])
+  languages         String[]           @default([])
+  officeAddress     String?
+  availabilityNote  String?
+  verifiedAt        DateTime?
+  reverifyAfter     DateTime?
+  bio               String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ClientProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  orgName   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Firm {
+  id          String   @id @default(cuid())
+  name        String
+  address     String?
+  jurisdiction String?
+  website     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  members     FirmMembership[]
+  matters     Matter[]
+}
+
+model FirmMembership {
+  id        String   @id @default(cuid())
+  firmId    String
+  userId    String
+  role      Role
+  status    String   @default("active")
+  invitedBy String?
+  createdAt DateTime @default(now())
+
+  firm Firm @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LawyerAvailability {
+  id        String          @id @default(cuid())
+  userId    String          @unique
+  mode      AvailabilityMode @default(AVAILABLE)
+  note      String?
+  updatedAt DateTime        @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model IntakeSubmission {
+  id            String   @id @default(cuid())
+  clientId      String
+  issueCategory String
+  urgency       String?
+  status        String   @default("open")
+  matterId      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  client User @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  matter Matter? @relation(fields: [matterId], references: [id])
+  answers IntakeAnswer[]
+  documents IntakeDocument[]
+}
+
+model IntakeAnswer {
+  id             String   @id @default(cuid())
+  submissionId   String
+  questionKey    String
+  answer         String
+
+  submission IntakeSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+}
+
+model IntakeDocument {
+  id             String   @id @default(cuid())
+  submissionId   String
+  url            String
+  hash           String
+  metadata       Json?
+  uploadedAt     DateTime @default(now())
+
+  submission IntakeSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+}
+
+model Matter {
+  id              String       @id @default(cuid())
+  title           String
+  description     String?
+  status          MatterStatus @default(DRAFT)
+  primaryAdvocateId String?
+  clientId        String?
+  firmId          String?
+  intakeId        String?
+  proBono         Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  primaryAdvocate User? @relation(fields: [primaryAdvocateId], references: [id])
+  client          User? @relation(fields: [clientId], references: [id])
+  firm            Firm? @relation(fields: [firmId], references: [id])
+  intake          IntakeSubmission? @relation(fields: [intakeId], references: [id])
+  assignments     MatterAssignment[]
+  parties         MatterParty[]
+  notes           MatterNote[]
+  events          MatterEvent[]
+  tasks           MatterTask[]
+  evidenceItems   EvidenceItem[]
+  drafts          DraftDocument[]
+  threads         MessageThread[]
+}
+
+model MatterParty {
+  id        String   @id @default(cuid())
+  matterId  String
+  name      String
+  role      String
+  contact   String?
+
+  matter Matter @relation(fields: [matterId], references: [id], onDelete: Cascade)
+}
+
+model MatterAssignment {
+  id        String   @id @default(cuid())
+  matterId  String
+  userId    String
+  role      String
+  addedById String?
+  createdAt DateTime @default(now())
+
+  matter Matter @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addedBy User? @relation("AssignmentAdder", fields: [addedById], references: [id])
+}
+
+model MatterNote {
+  id        String   @id @default(cuid())
+  matterId  String
+  authorId  String
+  content   String
+  visibility String  @default("internal")
+  createdAt DateTime @default(now())
+
+  matter Matter @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model MatterEvent {
+  id          String   @id @default(cuid())
+  matterId    String
+  type        String
+  description String?
+  occursAt    DateTime?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  matter Matter @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  createdBy User? @relation(fields: [createdById], references: [id])
+}
+
+model MatterTask {
+  id        String     @id @default(cuid())
+  matterId  String
+  title     String
+  dueDate   DateTime?
+  status    TaskStatus @default(TODO)
+  assigneeId String?
+  createdAt DateTime   @default(now())
+
+  matter Matter @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  assignee User? @relation(fields: [assigneeId], references: [id])
+}
+
+model EvidenceItem {
+  id            String          @id @default(cuid())
+  matterId      String
+  uploadedById  String
+  source        EvidenceSource  @default(ADVOCATE_UPLOAD)
+  hash          String
+  originalUrl   String
+  workingUrl    String?
+  filename      String
+  mimeType      String
+  sizeBytes     Int
+  tags          String[]        @default([])
+  createdAt     DateTime        @default(now())
+
+  matter    Matter @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  uploadedBy User  @relation(fields: [uploadedById], references: [id])
+  versions  EvidenceVersion[]
+  accessLogs EvidenceAccessLog[]
+}
+
+model EvidenceVersion {
+  id           String   @id @default(cuid())
+  evidenceItemId String
+  url          String
+  hash         String
+  createdAt    DateTime @default(now())
+
+  evidence EvidenceItem @relation(fields: [evidenceItemId], references: [id], onDelete: Cascade)
+}
+
+model EvidenceAccessLog {
+  id             String         @id @default(cuid())
+  evidenceItemId String
+  userId         String?
+  eventType      AccessEventType
+  meta           Json?
+  createdAt      DateTime @default(now())
+
+  evidence EvidenceItem @relation(fields: [evidenceItemId], references: [id], onDelete: Cascade)
+  user     User?        @relation(fields: [userId], references: [id])
+}
+
+model DraftDocument {
+  id            String      @id @default(cuid())
+  matterId      String
+  createdById   String
+  title         String
+  status        DraftStatus @default(DRAFTING)
+  template      String?
+  content       String?
+  aiMeta        Json?
+  lockedForExport Boolean   @default(false)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  matter Matter @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  createdBy User @relation(fields: [createdById], references: [id])
+  reviews DraftReview[]
+  approvals DraftApproval[]
+}
+
+model DraftReview {
+  id        String         @id @default(cuid())
+  draftId   String
+  reviewerId String
+  decision  ReviewDecision
+  comments  String?
+  createdAt DateTime @default(now())
+
+  draft    DraftDocument @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  reviewer User          @relation(fields: [reviewerId], references: [id])
+}
+
+model DraftApproval {
+  id         String   @id @default(cuid())
+  draftId    String
+  approverId String
+  acknowledged Boolean @default(false)
+  approvedAt DateTime @default(now())
+
+  draft    DraftDocument @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  approver User          @relation(fields: [approverId], references: [id])
+}
+
+model MessageThread {
+  id        String     @id @default(cuid())
+  subject   String?
+  type      ThreadType @default(DIRECT)
+  matterId  String?
+  panelId   String?
+  createdAt DateTime   @default(now())
+
+  matter Matter? @relation(fields: [matterId], references: [id])
+  panel  Panel?  @relation(fields: [panelId], references: [id])
+  messages Message[]
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  threadId  String
+  senderId  String
+  content   String
+  createdAt DateTime @default(now())
+
+  thread MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender User          @relation("UserMessages", fields: [senderId], references: [id])
+}
+
+model Connection {
+  id            String            @id @default(cuid())
+  requesterId   String
+  addresseeId   String
+  status        ConnectionStatus  @default(PENDING)
+  createdAt     DateTime          @default(now())
+
+  requester User @relation("ConnectionsSent", fields: [requesterId], references: [id])
+  addressee User @relation("ConnectionsReceived", fields: [addresseeId], references: [id])
+}
+
+model CollaborationRequest {
+  id        String            @id @default(cuid())
+  fromId    String
+  toId      String
+  type      CollaborationType
+  matterId  String?
+  message   String?
+  status    ConnectionStatus @default(PENDING)
+  createdAt DateTime         @default(now())
+
+  from User @relation("CollabFrom", fields: [fromId], references: [id])
+  to   User @relation("CollabTo", fields: [toId], references: [id])
+  matter Matter? @relation(fields: [matterId], references: [id])
+}
+
+model SOSIncident {
+  id           String         @id @default(cuid())
+  advocateId   String
+  status       IncidentStatus @default(OPEN)
+  triggeredAt  DateTime       @default(now())
+  acknowledgedAt DateTime?
+  closedAt     DateTime?
+  latitude     Float?
+  longitude    Float?
+  description  String?
+
+  advocate User @relation(fields: [advocateId], references: [id])
+  media    SOSIncidentMedia[]
+}
+
+model SOSIncidentMedia {
+  id          String   @id @default(cuid())
+  incidentId  String
+  url         String
+  mimeType    String
+  createdAt   DateTime @default(now())
+
+  incident SOSIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+}
+
+model LawfulProcessRequest {
+  id          String   @id @default(cuid())
+  userId      String
+  description String
+  status      ComplaintStatus @default(OPEN)
+  createdAt   DateTime @default(now())
+  resolvedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Complaint {
+  id            String          @id @default(cuid())
+  targetUserId  String?
+  matterId      String?
+  filedById     String
+  category      String
+  description   String
+  status        ComplaintStatus @default(OPEN)
+  createdAt     DateTime @default(now())
+  resolvedAt    DateTime?
+
+  targetUser User? @relation("ComplaintsAgainst", fields: [targetUserId], references: [id])
+  filedBy    User  @relation("ComplaintsFiled", fields: [filedById], references: [id])
+  matter     Matter? @relation(fields: [matterId], references: [id])
+}
+
+model ProfileCorrectionRequest {
+  id          String          @id @default(cuid())
+  userId      String
+  field       String
+  requestedValue String
+  status      ComplaintStatus @default(OPEN)
+  createdAt   DateTime @default(now())
+  reviewedAt  DateTime?
+  reviewerId  String?
+
+  user User @relation(fields: [userId], references: [id])
+  reviewer User? @relation("CorrectionReviewer", fields: [reviewerId], references: [id])
+}
+
+model SubscriptionPlan {
+  id          String   @id @default(cuid())
+  name        String
+  priceCents  Int
+  interval    String
+  features    String[] @default([])
+  active      Boolean  @default(true)
+}
+
+model Subscription {
+  id         String             @id @default(cuid())
+  userId     String
+  planId     String
+  status     SubscriptionStatus @default(ACTIVE)
+  startedAt  DateTime           @default(now())
+  endsAt     DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+  plan SubscriptionPlan @relation(fields: [planId], references: [id])
+  invoices Invoice[]
+}
+
+model Invoice {
+  id             String   @id @default(cuid())
+  subscriptionId String
+  amountCents    Int
+  status         String   @default("pending")
+  issuedAt       DateTime @default(now())
+  paidAt         DateTime?
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id        String      @id @default(cuid())
+  actorId   String?
+  action    AuditAction
+  entityType String
+  entityId  String
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id])
+}
+
+model Panel {
+  id          String    @id @default(cuid())
+  name        String
+  type        PanelType
+  description String?
+  isPrivate   Boolean   @default(true)
+  createdById String
+  createdAt   DateTime  @default(now())
+
+  createdBy User @relation("PanelsCreated", fields: [createdById], references: [id])
+  memberships PanelMembership[]
+  threads    MessageThread[]
+}
+
+model PanelMembership {
+  id        String    @id @default(cuid())
+  panelId   String
+  userId    String
+  role      PanelRole @default(MEMBER)
+  createdAt DateTime  @default(now())
+
+  panel Panel @relation(fields: [panelId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ServiceFeedback {
+  id          String          @id @default(cuid())
+  advocateId  String
+  clientId    String
+  matterId    String?
+  feedback    String
+  status      ComplaintStatus @default(OPEN)
+  createdAt   DateTime @default(now())
+
+  advocate User @relation(fields: [advocateId], references: [id])
+  client   User @relation(fields: [clientId], references: [id])
+  matter   Matter? @relation(fields: [matterId], references: [id])
+}
