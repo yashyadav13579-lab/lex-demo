@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { AvailabilityMode } from '@prisma/client'
+
+const AVAILABILITY_MODES = ['AVAILABLE', 'BUSY', 'AWAY', 'OFFLINE'] as const
+type AvailabilityMode = (typeof AVAILABILITY_MODES)[number]
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -8,7 +10,11 @@ export async function GET(request: Request) {
   const language = searchParams.get('language') || undefined
   const practice = searchParams.get('practice') || undefined
   const jurisdiction = searchParams.get('jurisdiction') || undefined
-  const availability = searchParams.get('availability') as AvailabilityMode | null
+  const rawAvailability = searchParams.get('availability')
+  const availability =
+    rawAvailability && AVAILABILITY_MODES.includes(rawAvailability as AvailabilityMode)
+      ? (rawAvailability as AvailabilityMode)
+      : null
 
   const advocates = await prisma.advocateProfile.findMany({
     where: {
@@ -31,21 +37,22 @@ export async function GET(request: Request) {
     }
   })
 
-  const rotated = advocates.sort((a, b) => (a.id > b.id ? 1 : -1))
+  type AdvocateResult = (typeof advocates)[number]
+  const rotated = advocates.sort((a: AdvocateResult, b: AdvocateResult) => (a.id > b.id ? 1 : -1))
 
   const filtered = availability
-    ? rotated.filter((a) => a.user.availability?.mode === availability)
+    ? rotated.filter((a: AdvocateResult) => a.user.availability?.mode === availability)
     : rotated
 
   return NextResponse.json(
-    filtered.map((a) => ({
+    filtered.map((a: AdvocateResult) => ({
       id: a.id,
       name: a.user.name,
       email: a.user.email,
       languages: a.languages,
       practiceAreas: a.practiceAreas,
       jurisdictions: a.jurisdictions,
-      availability: a.user.availability?.mode ?? AvailabilityMode.AVAILABLE
+      availability: a.user.availability?.mode ?? 'AVAILABLE'
     }))
   )
 }

@@ -13,10 +13,11 @@ export default async function DashboardPage() {
   const { prisma } = await import('@/lib/prisma')
 
   const session = await getServerSession(authOptions)
-  if (!session?.user) redirect('/auth/sign-in')
+  const userId = session?.user?.id
+  if (!userId) redirect('/auth/sign-in')
 
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: userId },
     include: { advocateProfile: true, clientProfile: true, firmMemberships: true }
   })
 

@@ -1,4 +1,3 @@
-import { DraftStatus, Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 
 async function callModel(prompt: string): Promise<string> {
@@ -11,7 +10,7 @@ export async function generateDraft(params: {
   createdById: string
   title: string
   template?: string
-  context?: Prisma.JsonValue
+  context?: Record<string, unknown> | unknown[] | string | number | boolean | null
 }) {
   const content = await callModel(`Title: ${params.title}\nContext: ${JSON.stringify(params.context)}`)
   const draft = await prisma.draftDocument.create({
@@ -21,7 +20,7 @@ export async function generateDraft(params: {
       title: params.title,
       template: params.template,
       content,
-      status: DraftStatus.NEEDS_REVIEW,
+      status: 'NEEDS_REVIEW',
       aiMeta: params.context
     }
   })

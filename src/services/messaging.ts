@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
-import { ThreadType } from '@prisma/client'
+
+type ThreadType = 'DIRECT' | 'MATTER' | 'PANEL'
 
 export async function createThread(params: {
   type: ThreadType

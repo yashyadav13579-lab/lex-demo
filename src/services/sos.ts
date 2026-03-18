@@ -1,5 +1,4 @@
 import { prisma } from '@/lib/prisma'
-import { IncidentStatus } from '@prisma/client'
 
 export async function createSOSIncident(params: {
   advocateId: string
@@ -13,7 +12,7 @@ export async function createSOSIncident(params: {
       description: params.description,
       latitude: params.latitude,
       longitude: params.longitude,
-      status: IncidentStatus.OPEN
+      status: 'OPEN'
     }
   })
 }
@@ -22,7 +21,7 @@ export async function closeSOSIncident(id: string, closedById?: string) {
   return prisma.sosIncident.update({
     where: { id },
     data: {
-      status: IncidentStatus.CLOSED,
+      status: 'CLOSED',
       closedAt: new Date()
     }
   })

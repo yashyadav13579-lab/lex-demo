@@ -1,7 +1,9 @@
 import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
-import { EvidenceSource, AccessEventType, AuditAction } from '@prisma/client'
 import { recordAudit } from './audit'
+
+type EvidenceSource = 'CLIENT_UPLOAD' | 'ADVOCATE_UPLOAD' | 'SYSTEM_GENERATED' | 'IMPORTED'
+type AccessEventType = 'VIEW' | 'DOWNLOAD' | 'EXPORT' | 'SHARE'
 
 export function hashBuffer(buffer: Buffer) {
   return crypto.createHash('sha256').update(buffer).digest('hex')
@@ -24,7 +26,7 @@ export async function registerEvidence(params: {
     data: {
       matterId: params.matterId,
       uploadedById: params.uploadedById,
-      source: params.source ?? EvidenceSource.ADVOCATE_UPLOAD,
+      source: params.source ?? 'ADVOCATE_UPLOAD',
       hash,
       originalUrl: params.storageUrl,
       filename: params.filename,
@@ -36,7 +38,7 @@ export async function registerEvidence(params: {
 
   await recordAudit({
     actorId: params.uploadedById,
-    action: AuditAction.EVIDENCE_EXPORT,
+    action: 'EVIDENCE_EXPORT',
     entityType: 'EvidenceItem',
     entityId: evidence.id,
     meta: { hash }

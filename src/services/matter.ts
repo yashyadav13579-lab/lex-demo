@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { AuditAction, MatterStatus, Prisma, Role } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { recordAudit } from './audit'
 
 export async function createMatter(params: {
@@ -19,7 +19,7 @@ export async function createMatter(params: {
       primaryAdvocateId: params.primaryAdvocateId,
       firmId: params.firmId,
       proBono: params.proBono ?? false,
-      status: MatterStatus.OPEN
+      status: 'OPEN'
     }
   })
 
@@ -34,7 +34,7 @@ export async function createMatter(params: {
 
   await recordAudit({
     actorId: params.actorId,
-    action: AuditAction.MATTER_ASSIGNMENT_CHANGE,
+    action: 'MATTER_ASSIGNMENT_CHANGE',
     entityType: 'Matter',
     entityId: matter.id,
     meta: { description: 'Matter created' }

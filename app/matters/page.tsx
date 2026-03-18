@@ -14,13 +14,15 @@ export default async function MattersPage() {
 
   const session = await getServerSession(authOptions)
   if (!session?.user) redirect('/auth/sign-in')
+  const userId = session?.user?.id
+  if (!userId) redirect('/auth/sign-in')
 
   const matters = await prisma.matter.findMany({
     where: {
       OR: [
-        { primaryAdvocateId: session.user.id },
-        { clientId: session.user.id },
-        { assignments: { some: { userId: session.user.id } } }
+        { primaryAdvocateId: userId },
+        { clientId: userId },
+        { assignments: { some: { userId } } }
       ]
     },
     include: { client: true, primaryAdvocate: true }
@@ -46,7 +48,14 @@ export default async function MattersPage() {
             </Link>
           </div>
         ) : (
-          matters.map((m) => (
+          matters.map(
+            (m: {
+              id: string
+              title: string
+              status: string
+              client: { name: string | null } | null
+              primaryAdvocate: { name: string | null } | null
+            }) => (
             <Link key={m.id} href={`/matters/${m.id}`} className="block border bg-white p-4 rounded-lg shadow-sm">
               <div className="font-semibold">{m.title}</div>
               <div className="text-sm text-slate-600">Status: {m.status}</div>
@@ -54,7 +63,8 @@ export default async function MattersPage() {
                 Client: {m.client?.name ?? 'N/A'} | Advocate: {m.primaryAdvocate?.name ?? 'N/A'}
               </div>
             </Link>
-          ))
+            )
+          )
         )}
       </div>
     </div>

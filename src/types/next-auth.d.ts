@@ -1,5 +1,6 @@
 import NextAuth, { DefaultSession } from 'next-auth'
-import { Role } from '@prisma/client'
+
+type Role = 'CLIENT' | 'ADVOCATE' | 'FIRM_MEMBER' | 'FIRM_ADMIN' | 'REVIEWER' | 'ADMIN' | 'COMPLIANCE_ADMIN' | 'SUPER_ADMIN'
 
 declare module 'next-auth' {
   interface Session {

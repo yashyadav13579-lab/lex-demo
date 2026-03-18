@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { hash } from 'bcryptjs'
-import { Role, VerificationStatus } from '@prisma/client'
+
+const ALLOWED_ROLES = ['CLIENT', 'ADVOCATE', 'FIRM_ADMIN', 'FIRM_MEMBER'] as const
+type Role = (typeof ALLOWED_ROLES)[number]
 
 export async function POST(request: Request) {
   const data = await request.json()
@@ -17,26 +19,27 @@ export async function POST(request: Request) {
   }
 
   const passwordHash = await hash(password, 10)
+  const normalizedRole: Role = ALLOWED_ROLES.includes(role as Role) ? (role as Role) : 'CLIENT'
 
   const user = await prisma.user.create({
     data: {
       name,
       email,
       passwordHash,
-      role: (role as Role) ?? Role.CLIENT
+      role: normalizedRole
     }
   })
 
-  if (role === Role.ADVOCATE) {
+  if (normalizedRole === 'ADVOCATE') {
     await prisma.advocateProfile.create({
       data: {
         userId: user.id,
-        verificationStatus: VerificationStatus.PENDING
+        verificationStatus: 'PENDING'
       }
     })
   }
 
-  if (role === Role.CLIENT) {
+  if (normalizedRole === 'CLIENT') {
     await prisma.clientProfile.create({ data: { userId: user.id } })
   }
 

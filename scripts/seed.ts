@@ -1,5 +1,4 @@
 import { prisma } from '../src/lib/prisma'
-import { Role } from '@prisma/client'
 import { hash } from 'bcryptjs'
 
 async function main() {
@@ -13,7 +12,7 @@ async function main() {
       email: adminEmail,
       name: 'Admin',
       passwordHash: adminPassword,
-      role: Role.SUPER_ADMIN
+      role: 'SUPER_ADMIN'
     }
   })
 

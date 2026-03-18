@@ -2,12 +2,11 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { Role } from '@prisma/client'
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions)
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (session.user.role !== Role.CLIENT) {
+  if (session.user.role !== 'CLIENT') {
     return NextResponse.json({ error: 'Only clients can start intake' }, { status: 403 })
   }
 
