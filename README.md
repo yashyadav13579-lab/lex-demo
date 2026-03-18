@@ -25,6 +25,7 @@ Tech stack: Next.js (App Router) + TypeScript + Tailwind + Prisma + Postgres + N
 - `npm run lint` - Run ESLint
 - `npm run check:links` - Validate internal app links against existing routes
 - `npm run check:frontend` - Run front-end baseline checks (`lint` + `check:links`)
+- `npm run check:backend` - Run lightweight backend smoke checks against a running local server
 - `npm run prisma:generate` - Generate Prisma client
 - `npm run prisma:migrate` - Run Prisma dev migrations
 - `npm run prisma:studio` - Open Prisma Studio
@@ -58,3 +59,20 @@ Run this before merging front-end changes:
 ## RBAC Roles
 
 `CLIENT`, `ADVOCATE`, `FIRM_MEMBER`, `FIRM_ADMIN`, `REVIEWER`, `ADMIN`, `COMPLIANCE_ADMIN`, `SUPER_ADMIN`.
+
+## API Contract (Backend B4/B5 baseline)
+
+- List endpoints return a paginated envelope:
+  - `{ ok: true, data: { items: [...], page: { limit, offset, total, hasMore } } }`
+- Error envelope:
+  - `{ ok: false, error: string, code: string, details: object | null }`
+- Core secured routes:
+  - `GET/POST /api/matters`
+  - `GET/PATCH/DELETE /api/matters/:id` (`DELETE` archives via `status=ARCHIVED`)
+  - `GET/POST /api/evidence`
+  - `GET/PATCH/DELETE /api/evidence/:id`
+  - `GET/POST /api/drafts`
+  - `GET/PATCH/DELETE /api/drafts/:id`
+  - `GET/POST /api/intake`
+  - `GET/POST /api/sos`
+  - `GET/PATCH /api/sos/:id`

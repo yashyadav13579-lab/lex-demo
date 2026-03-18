@@ -1,0 +1,83 @@
+import { prisma } from '@/lib/prisma'
+import { apiError, apiSuccess } from '@/lib/api-response'
+import { type AppRole, hasGlobalScope, requireSessionUser } from '@/lib/api-auth'
+import { z } from 'zod'
+
+const sosPatchSchema = z
+  .object({
+    status: z.enum(['OPEN', 'ACKNOWLEDGED', 'CLOSED']).optional(),
+    description: z.string().trim().max(1000).nullable().optional()
+  })
+  .refine((val) => Object.keys(val).length > 0, { message: 'At least one field is required' })
+
+function canAccessIncident(userId: string, role: AppRole, advocateId: string) {
+  return hasGlobalScope(role) || advocateId === userId
+}
+
+export async function GET(_request: Request, { params }: { params: { id: string } }) {
+  const auth = await requireSessionUser([
+    'ADVOCATE',
+    'FIRM_MEMBER',
+    'FIRM_ADMIN',
+    'REVIEWER',
+    'ADMIN',
+    'COMPLIANCE_ADMIN',
+    'SUPER_ADMIN'
+  ])
+  if (auth.errorResponse) return auth.errorResponse
+
+  const incident = await prisma.sOSIncident.findUnique({
+    where: { id: params.id },
+    include: {
+      advocate: { select: { id: true, name: true, email: true, role: true } },
+      media: { orderBy: { createdAt: 'desc' } }
+    }
+  })
+  if (!incident) return apiError(404, 'SOS incident not found', 'NOT_FOUND')
+
+  if (!canAccessIncident(auth.user.id, auth.user.role, incident.advocateId)) {
+    return apiError(404, 'SOS incident not found', 'NOT_FOUND')
+  }
+
+  return apiSuccess(incident)
+}
+
+export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+  const auth = await requireSessionUser(['ADVOCATE', 'FIRM_MEMBER', 'FIRM_ADMIN', 'ADMIN', 'COMPLIANCE_ADMIN', 'SUPER_ADMIN'])
+  if (auth.errorResponse) return auth.errorResponse
+
+  const body = await request.json().catch(() => null)
+  const parsed = sosPatchSchema.safeParse(body)
+  if (!parsed.success) {
+    return apiError(400, 'Invalid SOS update payload', 'INVALID_PAYLOAD')
+  }
+
+  const incident = await prisma.sOSIncident.findUnique({
+    where: { id: params.id },
+    select: { id: true, advocateId: true }
+  })
+  if (!incident) return apiError(404, 'SOS incident not found', 'NOT_FOUND')
+
+  if (!canAccessIncident(auth.user.id, auth.user.role, incident.advocateId)) {
+    return apiError(404, 'SOS incident not found', 'NOT_FOUND')
+  }
+
+  const patchData: { status?: 'OPEN' | 'ACKNOWLEDGED' | 'CLOSED'; description?: string | null; acknowledgedAt?: Date; closedAt?: Date } =
+    {}
+  if (parsed.data.status) {
+    patchData.status = parsed.data.status
+    if (parsed.data.status === 'ACKNOWLEDGED') patchData.acknowledgedAt = new Date()
+    if (parsed.data.status === 'CLOSED') patchData.closedAt = new Date()
+  }
+  if (Object.hasOwn(parsed.data, 'description')) patchData.description = parsed.data.description
+
+  try {
+    const updated = await prisma.sOSIncident.update({
+      where: { id: params.id },
+      data: patchData
+    })
+    return apiSuccess(updated)
+  } catch {
+    return apiError(500, 'Unable to update SOS incident right now', 'INTERNAL_ERROR')
+  }
+}

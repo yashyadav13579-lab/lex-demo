@@ -23,6 +23,24 @@ async function main() {
   await expectJson('/api/drafts', 401, expectUnauthorizedEnvelope)
   await expectJson('/api/intake', 401, expectUnauthorizedEnvelope)
   await expectJson('/api/sos', 401, expectUnauthorizedEnvelope)
+  await expectJson('/api/matters/smoke-id', 401, expectUnauthorizedEnvelope, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: 'x' })
+  })
+  await expectJson('/api/drafts/smoke-id', 401, expectUnauthorizedEnvelope, {
+    method: 'DELETE'
+  })
+  await expectJson('/api/evidence/smoke-id', 401, expectUnauthorizedEnvelope, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tags: ['smoke'] })
+  })
+  await expectJson('/api/sos/smoke-id', 401, expectUnauthorizedEnvelope, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'ACKNOWLEDGED' })
+  })
 
   await expectJson(
     '/api/auth/sign-up',

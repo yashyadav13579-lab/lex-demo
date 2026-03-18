@@ -31,3 +31,6 @@
 - B4: Added pagination metadata (`limit`, `offset`, `total`, `hasMore`) to list APIs (matters, evidence, drafts, intake, SOS) with a shared response helper for deterministic client consumption.
 - B4: Wrapped matter/evidence create workflows in Prisma transactions so primary record creation and audit/assignment side effects commit atomically.
 - B4: Added a lightweight backend smoke script (`npm run check:backend`) to validate core unauth/error envelopes and sign-up success/duplicate behavior against a running local server.
+- B5: Added secured detail-mutation routes for matter/draft/evidence/SOS to make update/delete flows explicit and enforce ownership-aware RBAC on every mutation path.
+- B5: Matter `DELETE /api/matters/:id` is implemented as soft archive (`status=ARCHIVED`) to preserve legal/audit traceability by default.
+- B5: Adopted detail-route read behavior where inaccessible resources return `404` (not `403`) to keep resource existence private across tenant/role boundaries.
