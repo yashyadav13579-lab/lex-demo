@@ -18,42 +18,46 @@ export async function GET(_request: Request, { params }: { params: { id: string 
   const access = await assertMatterAccess(auth.user, params.id, false)
   if (access.errorResponse) return access.errorResponse
 
-  const matter = await prisma.matter.findUnique({
-    where: { id: params.id },
-    include: {
-      client: { select: { id: true, name: true, email: true } },
-      primaryAdvocate: { select: { id: true, name: true, email: true } },
-      assignments: {
-        include: { user: { select: { id: true, name: true, email: true, role: true } } },
-        orderBy: { createdAt: 'asc' }
-      },
-      parties: { orderBy: { id: 'asc' } },
-      notes: {
-        include: { author: { select: { id: true, name: true, role: true } } },
-        orderBy: { createdAt: 'desc' },
-        take: 50
-      },
-      events: { orderBy: { createdAt: 'desc' }, take: 100 },
-      tasks: {
-        include: { assignee: { select: { id: true, name: true, role: true } } },
-        orderBy: { createdAt: 'desc' },
-        take: 100
-      },
-      _count: {
-        select: {
-          evidenceItems: true,
-          drafts: true,
-          notes: true,
-          tasks: true,
-          events: true
+  try {
+    const matter = await prisma.matter.findUnique({
+      where: { id: params.id },
+      include: {
+        client: { select: { id: true, name: true, email: true } },
+        primaryAdvocate: { select: { id: true, name: true, email: true } },
+        assignments: {
+          include: { user: { select: { id: true, name: true, email: true, role: true } } },
+          orderBy: { createdAt: 'asc' }
+        },
+        parties: { orderBy: { id: 'asc' } },
+        notes: {
+          include: { author: { select: { id: true, name: true, role: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: 50
+        },
+        events: { orderBy: { createdAt: 'desc' }, take: 100 },
+        tasks: {
+          include: { assignee: { select: { id: true, name: true, role: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: 100
+        },
+        _count: {
+          select: {
+            evidenceItems: true,
+            drafts: true,
+            notes: true,
+            tasks: true,
+            events: true
+          }
         }
       }
+    })
+
+    if (!matter) {
+      return apiError(404, 'Matter not found', 'NOT_FOUND')
     }
-  })
 
-  if (!matter) {
-    return apiError(404, 'Matter not found', 'NOT_FOUND')
+    return apiSuccess(matter)
+  } catch {
+    return apiError(500, 'Unable to fetch matter right now', 'INTERNAL_ERROR')
   }
-
-  return apiSuccess(matter)
 }

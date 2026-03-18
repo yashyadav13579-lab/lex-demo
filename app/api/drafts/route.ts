@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { generateDraft } from '@/services/ai'
 import { z } from 'zod'
-import { apiError, apiSuccess, parseQueryLimit } from '@/lib/api-response'
+import { apiError, apiPaginatedSuccess, parseQueryLimit, parseQueryOffset } from '@/lib/api-response'
 import { assertMatterAccess, buildMatterAccessWhere, hasGlobalScope, requireSessionUser } from '@/lib/api-auth'
 import { prisma } from '@/lib/prisma'
 
@@ -25,13 +25,18 @@ export async function POST(request: Request) {
   const access = await assertMatterAccess(auth.user, parsed.data.matterId, true)
   if (access.errorResponse) return access.errorResponse
 
-  const draft = await generateDraft({
-    matterId: parsed.data.matterId,
-    createdById: auth.user.id,
-    title: parsed.data.title,
-    template: parsed.data.template,
-    context: parsed.data.context as Record<string, unknown> | unknown[] | string | number | boolean | null | undefined
-  })
+  let draft
+  try {
+    draft = await generateDraft({
+      matterId: parsed.data.matterId,
+      createdById: auth.user.id,
+      title: parsed.data.title,
+      template: parsed.data.template,
+      context: parsed.data.context as Record<string, unknown> | unknown[] | string | number | boolean | null | undefined
+    })
+  } catch {
+    return apiError(500, 'Unable to generate draft right now', 'INTERNAL_ERROR')
+  }
 
   return NextResponse.json(draft)
 }
@@ -51,6 +56,7 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const limit = parseQueryLimit(searchParams)
+  const offset = parseQueryOffset(searchParams)
   const matterId = searchParams.get('matterId')
 
   if (matterId) {
@@ -58,18 +64,28 @@ export async function GET(request: Request) {
     if (access.errorResponse) return access.errorResponse
   }
 
-  const items = await prisma.draftDocument.findMany({
-    where: {
-      ...(matterId ? { matterId } : {}),
-      ...(hasGlobalScope(auth.user.role) ? {} : { matter: buildMatterAccessWhere(auth.user) })
-    },
-    include: {
-      matter: { select: { id: true, title: true, status: true } },
-      createdBy: { select: { id: true, name: true, email: true } }
-    },
-    orderBy: { updatedAt: 'desc' },
-    take: limit
-  })
+  const where = {
+    ...(matterId ? { matterId } : {}),
+    ...(hasGlobalScope(auth.user.role) ? {} : { matter: buildMatterAccessWhere(auth.user) })
+  }
 
-  return apiSuccess({ items })
+  try {
+    const [total, items] = await Promise.all([
+      prisma.draftDocument.count({ where }),
+      prisma.draftDocument.findMany({
+        where,
+        include: {
+          matter: { select: { id: true, title: true, status: true } },
+          createdBy: { select: { id: true, name: true, email: true } }
+        },
+        orderBy: { updatedAt: 'desc' },
+        skip: offset,
+        take: limit
+      })
+    ])
+
+    return apiPaginatedSuccess(items, { limit, offset, total })
+  } catch {
+    return apiError(500, 'Unable to fetch drafts right now', 'INTERNAL_ERROR')
+  }
 }

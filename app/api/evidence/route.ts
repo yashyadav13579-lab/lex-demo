@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { registerEvidence } from '@/services/evidence'
 import { z } from 'zod'
-import { apiError, apiSuccess, parseQueryLimit } from '@/lib/api-response'
+import { apiError, apiPaginatedSuccess, parseQueryLimit, parseQueryOffset } from '@/lib/api-response'
 import { assertMatterAccess, buildMatterAccessWhere, hasGlobalScope, requireSessionUser } from '@/lib/api-auth'
 import { prisma } from '@/lib/prisma'
 
@@ -31,16 +31,21 @@ export async function POST(request: Request) {
   const { matterId, filename, mimeType, sizeBytes, storageUrl, tags, base64 } = parsed.data
 
   const buffer = base64 ? Buffer.from(base64, 'base64') : undefined
-  const evidence = await registerEvidence({
-    matterId,
-    uploadedById: auth.user.id,
-    filename,
-    mimeType,
-    sizeBytes,
-    storageUrl,
-    buffer,
-    tags
-  })
+  let evidence
+  try {
+    evidence = await registerEvidence({
+      matterId,
+      uploadedById: auth.user.id,
+      filename,
+      mimeType,
+      sizeBytes,
+      storageUrl,
+      buffer,
+      tags
+    })
+  } catch {
+    return apiError(500, 'Unable to register evidence right now', 'INTERNAL_ERROR')
+  }
 
   return NextResponse.json(evidence)
 }
@@ -60,6 +65,7 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const limit = parseQueryLimit(searchParams)
+  const offset = parseQueryOffset(searchParams)
   const matterId = searchParams.get('matterId')
 
   if (matterId) {
@@ -67,18 +73,28 @@ export async function GET(request: Request) {
     if (access.errorResponse) return access.errorResponse
   }
 
-  const items = await prisma.evidenceItem.findMany({
-    where: {
-      ...(matterId ? { matterId } : {}),
-      ...(hasGlobalScope(auth.user.role) ? {} : { matter: buildMatterAccessWhere(auth.user) })
-    },
-    include: {
-      matter: { select: { id: true, title: true, status: true } },
-      uploadedBy: { select: { id: true, name: true, email: true } }
-    },
-    orderBy: { createdAt: 'desc' },
-    take: limit
-  })
+  const where = {
+    ...(matterId ? { matterId } : {}),
+    ...(hasGlobalScope(auth.user.role) ? {} : { matter: buildMatterAccessWhere(auth.user) })
+  }
 
-  return apiSuccess({ items })
+  try {
+    const [total, items] = await Promise.all([
+      prisma.evidenceItem.count({ where }),
+      prisma.evidenceItem.findMany({
+        where,
+        include: {
+          matter: { select: { id: true, title: true, status: true } },
+          uploadedBy: { select: { id: true, name: true, email: true } }
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: offset,
+        take: limit
+      })
+    ])
+
+    return apiPaginatedSuccess(items, { limit, offset, total })
+  } catch {
+    return apiError(500, 'Unable to fetch evidence right now', 'INTERNAL_ERROR')
+  }
 }

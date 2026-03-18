@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSOSIncident } from '@/services/sos'
 import { z } from 'zod'
-import { apiError, apiSuccess, parseQueryLimit } from '@/lib/api-response'
+import { apiError, apiPaginatedSuccess, parseQueryLimit, parseQueryOffset } from '@/lib/api-response'
 import { hasGlobalScope, requireSessionUser } from '@/lib/api-auth'
 import { prisma } from '@/lib/prisma'
 
@@ -21,12 +21,17 @@ export async function POST(request: Request) {
     return apiError(400, 'Invalid incident payload', 'INVALID_PAYLOAD')
   }
 
-  const incident = await createSOSIncident({
-    advocateId: auth.user.id,
-    description: parsed.data.description,
-    latitude: parsed.data.latitude,
-    longitude: parsed.data.longitude
-  })
+  let incident
+  try {
+    incident = await createSOSIncident({
+      advocateId: auth.user.id,
+      description: parsed.data.description,
+      latitude: parsed.data.latitude,
+      longitude: parsed.data.longitude
+    })
+  } catch {
+    return apiError(500, 'Unable to create SOS incident right now', 'INTERNAL_ERROR')
+  }
 
   return NextResponse.json(incident)
 }
@@ -45,16 +50,27 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const limit = parseQueryLimit(searchParams)
+  const offset = parseQueryOffset(searchParams)
 
-  const incidents = await prisma.sOSIncident.findMany({
-    where: hasGlobalScope(auth.user.role) ? {} : { advocateId: auth.user.id },
-    include: {
-      advocate: { select: { id: true, name: true, email: true, role: true } },
-      media: true
-    },
-    orderBy: { triggeredAt: 'desc' },
-    take: limit
-  })
+  const where = hasGlobalScope(auth.user.role) ? {} : { advocateId: auth.user.id }
 
-  return apiSuccess({ items: incidents })
+  try {
+    const [total, incidents] = await Promise.all([
+      prisma.sOSIncident.count({ where }),
+      prisma.sOSIncident.findMany({
+        where,
+        include: {
+          advocate: { select: { id: true, name: true, email: true, role: true } },
+          media: true
+        },
+        orderBy: { triggeredAt: 'desc' },
+        skip: offset,
+        take: limit
+      })
+    ])
+
+    return apiPaginatedSuccess(incidents, { limit, offset, total })
+  } catch {
+    return apiError(500, 'Unable to fetch SOS incidents right now', 'INTERNAL_ERROR')
+  }
 }

@@ -28,3 +28,6 @@
 - B3: Added explicit matter-access ownership checks for evidence/draft write paths to block cross-matter writes unless the user is assigned, primary advocate, same-firm member, or global admin scope.
 - B3: Chose `404` on failed matter access checks (instead of `403`) to reduce matter-id enumeration risk in authenticated contexts.
 - B3: Intake history read access is currently limited to the client owner or global compliance/admin roles until assignment-level intake visibility rules are defined.
+- B4: Added pagination metadata (`limit`, `offset`, `total`, `hasMore`) to list APIs (matters, evidence, drafts, intake, SOS) with a shared response helper for deterministic client consumption.
+- B4: Wrapped matter/evidence create workflows in Prisma transactions so primary record creation and audit/assignment side effects commit atomically.
+- B4: Added a lightweight backend smoke script (`npm run check:backend`) to validate core unauth/error envelopes and sign-up success/duplicate behavior against a running local server.

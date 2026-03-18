@@ -11,33 +11,38 @@ export async function createMatter(params: {
   proBono?: boolean
   actorId: string
 }) {
-  const matter = await prisma.matter.create({
-    data: {
-      title: params.title,
-      description: params.description,
-      clientId: params.clientId,
-      primaryAdvocateId: params.primaryAdvocateId,
-      firmId: params.firmId,
-      proBono: params.proBono ?? false,
-      status: 'OPEN'
-    }
-  })
+  const matter = await prisma.$transaction(async (tx) => {
+    const createdMatter = await tx.matter.create({
+      data: {
+        title: params.title,
+        description: params.description,
+        clientId: params.clientId,
+        primaryAdvocateId: params.primaryAdvocateId,
+        firmId: params.firmId,
+        proBono: params.proBono ?? false,
+        status: 'OPEN'
+      }
+    })
 
-  await prisma.matterAssignment.create({
-    data: {
-      matterId: matter.id,
-      userId: params.primaryAdvocateId,
-      role: 'LEAD',
-      addedById: params.actorId
-    }
-  })
+    await tx.matterAssignment.create({
+      data: {
+        matterId: createdMatter.id,
+        userId: params.primaryAdvocateId,
+        role: 'LEAD',
+        addedById: params.actorId
+      }
+    })
 
-  await recordAudit({
-    actorId: params.actorId,
-    action: 'MATTER_ASSIGNMENT_CHANGE',
-    entityType: 'Matter',
-    entityId: matter.id,
-    meta: { description: 'Matter created' }
+    await recordAudit({
+      actorId: params.actorId,
+      action: 'MATTER_ASSIGNMENT_CHANGE',
+      entityType: 'Matter',
+      entityId: createdMatter.id,
+      meta: { description: 'Matter created' },
+      db: tx
+    })
+
+    return createdMatter
   })
 
   return matter

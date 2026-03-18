@@ -9,6 +9,7 @@
     "lint": "next lint",
     "check:links": "node scripts/check-internal-links.mjs",
     "check:frontend": "npm run lint && npm run check:links",
+    "check:backend": "node scripts/smoke-backend.mjs",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",

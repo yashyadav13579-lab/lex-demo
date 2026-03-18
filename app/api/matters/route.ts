@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createMatter } from '@/services/matter'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
-import { apiError, apiSuccess, parseQueryLimit } from '@/lib/api-response'
+import { apiError, apiPaginatedSuccess, parseQueryLimit, parseQueryOffset } from '@/lib/api-response'
 import { buildMatterAccessWhere, requireSessionUser } from '@/lib/api-auth'
 
 const matterSchema = z.object({
@@ -31,6 +31,7 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const limit = parseQueryLimit(searchParams)
+  const offset = parseQueryOffset(searchParams)
   const rawStatus = searchParams.get('status')?.toUpperCase()
   const status = rawStatus && MATTER_STATUSES.includes(rawStatus as MatterStatus) ? (rawStatus as MatterStatus) : null
 
@@ -39,18 +40,26 @@ export async function GET(request: Request) {
     ...(status ? { status } : {})
   }
 
-  const matters = await prisma.matter.findMany({
-    where,
-    orderBy: { updatedAt: 'desc' },
-    take: limit,
-    include: {
-      client: { select: { id: true, name: true, email: true } },
-      primaryAdvocate: { select: { id: true, name: true, email: true } },
-      _count: { select: { evidenceItems: true, drafts: true, tasks: true } }
-    }
-  })
+  try {
+    const [total, matters] = await Promise.all([
+      prisma.matter.count({ where }),
+      prisma.matter.findMany({
+        where,
+        orderBy: { updatedAt: 'desc' },
+        skip: offset,
+        take: limit,
+        include: {
+          client: { select: { id: true, name: true, email: true } },
+          primaryAdvocate: { select: { id: true, name: true, email: true } },
+          _count: { select: { evidenceItems: true, drafts: true, tasks: true } }
+        }
+      })
+    ])
 
-  return apiSuccess({ items: matters })
+    return apiPaginatedSuccess(matters, { limit, offset, total })
+  } catch {
+    return apiError(500, 'Unable to fetch matters right now', 'INTERNAL_ERROR')
+  }
 }
 
 export async function POST(request: Request) {

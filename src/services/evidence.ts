@@ -22,26 +22,31 @@ export async function registerEvidence(params: {
 }) {
   const hash = params.buffer ? hashBuffer(params.buffer) : crypto.randomBytes(16).toString('hex')
 
-  const evidence = await prisma.evidenceItem.create({
-    data: {
-      matterId: params.matterId,
-      uploadedById: params.uploadedById,
-      source: params.source ?? 'ADVOCATE_UPLOAD',
-      hash,
-      originalUrl: params.storageUrl,
-      filename: params.filename,
-      mimeType: params.mimeType,
-      sizeBytes: params.sizeBytes,
-      tags: params.tags ?? []
-    }
-  })
+  const evidence = await prisma.$transaction(async (tx) => {
+    const createdEvidence = await tx.evidenceItem.create({
+      data: {
+        matterId: params.matterId,
+        uploadedById: params.uploadedById,
+        source: params.source ?? 'ADVOCATE_UPLOAD',
+        hash,
+        originalUrl: params.storageUrl,
+        filename: params.filename,
+        mimeType: params.mimeType,
+        sizeBytes: params.sizeBytes,
+        tags: params.tags ?? []
+      }
+    })
 
-  await recordAudit({
-    actorId: params.uploadedById,
-    action: 'EVIDENCE_EXPORT',
-    entityType: 'EvidenceItem',
-    entityId: evidence.id,
-    meta: { hash }
+    await recordAudit({
+      actorId: params.uploadedById,
+      action: 'EVIDENCE_EXPORT',
+      entityType: 'EvidenceItem',
+      entityId: createdEvidence.id,
+      meta: { hash },
+      db: tx
+    })
+
+    return createdEvidence
   })
 
   return evidence

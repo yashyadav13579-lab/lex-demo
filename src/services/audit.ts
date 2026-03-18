@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 
 type AuditAction =
   | 'VERIFICATION_DECISION'
@@ -18,8 +19,10 @@ export async function recordAudit(params: {
   entityType: string
   entityId: string
   meta?: Record<string, unknown> | unknown[] | string | number | boolean | null
+  db?: Prisma.TransactionClient
 }) {
-  return prisma.auditLog.create({
+  const db = params.db ?? prisma
+  return db.auditLog.create({
     data: {
       actorId: params.actorId,
       action: params.action,

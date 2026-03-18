@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
-import { apiError, apiSuccess, parseQueryLimit } from '@/lib/api-response'
+import { apiError, apiPaginatedSuccess, parseQueryLimit, parseQueryOffset } from '@/lib/api-response'
 import { hasGlobalScope, requireSessionUser } from '@/lib/api-auth'
 
 const intakeSchema = z.object({
@@ -27,19 +27,24 @@ export async function POST(request: Request) {
     return apiError(400, 'Invalid intake payload', 'INVALID_PAYLOAD')
   }
 
-  const submission = await prisma.intakeSubmission.create({
-    data: {
-      clientId: auth.user.id,
-      issueCategory: parsed.data.issueCategory,
-      urgency: parsed.data.urgency,
-      answers: {
-        create: (parsed.data.answers || []).map((ans) => ({
-          questionKey: ans.key,
-          answer: ans.value
-        }))
+  let submission
+  try {
+    submission = await prisma.intakeSubmission.create({
+      data: {
+        clientId: auth.user.id,
+        issueCategory: parsed.data.issueCategory,
+        urgency: parsed.data.urgency,
+        answers: {
+          create: (parsed.data.answers || []).map((ans) => ({
+            questionKey: ans.key,
+            answer: ans.value
+          }))
+        }
       }
-    }
-  })
+    })
+  } catch {
+    return apiError(500, 'Unable to submit intake right now', 'INTERNAL_ERROR')
+  }
 
   return NextResponse.json(submission)
 }
@@ -56,17 +61,28 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const limit = parseQueryLimit(searchParams)
+  const offset = parseQueryOffset(searchParams)
 
-  const submissions = await prisma.intakeSubmission.findMany({
-    where: hasGlobalScope(auth.user.role) ? {} : { clientId: auth.user.id },
-    include: {
-      client: { select: { id: true, name: true, email: true } },
-      matter: { select: { id: true, title: true, status: true } },
-      answers: true
-    },
-    orderBy: { createdAt: 'desc' },
-    take: limit
-  })
+  const where = hasGlobalScope(auth.user.role) ? {} : { clientId: auth.user.id }
 
-  return apiSuccess({ items: submissions })
+  try {
+    const [total, submissions] = await Promise.all([
+      prisma.intakeSubmission.count({ where }),
+      prisma.intakeSubmission.findMany({
+        where,
+        include: {
+          client: { select: { id: true, name: true, email: true } },
+          matter: { select: { id: true, title: true, status: true } },
+          answers: true
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: offset,
+        take: limit
+      })
+    ])
+
+    return apiPaginatedSuccess(submissions, { limit, offset, total })
+  } catch {
+    return apiError(500, 'Unable to fetch intake submissions right now', 'INTERNAL_ERROR')
+  }
 }
