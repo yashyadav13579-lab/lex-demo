@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
 import { hash } from 'bcryptjs'
 import { isDemoAuthEnabled } from '@/lib/demo-auth'
 
@@ -16,6 +15,7 @@ export async function POST(request: Request) {
 
   const data = await request.json()
   const { name, email, password, role } = data || {}
+  const { prisma } = await import('@/lib/prisma')
 
   if (!email || !password || !name) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
