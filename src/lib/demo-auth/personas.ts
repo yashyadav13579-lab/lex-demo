@@ -18,6 +18,14 @@ function makePersona(params: {
 
 export const DEMO_PERSONAS: DemoPersona[] = [
   makePersona({
+    id: 'demo-super-admin-1',
+    name: 'Lex Master Admin',
+    email: 'master.demo@lexsovereign.local',
+    role: 'SUPER_ADMIN',
+    verificationStatus: 'VERIFIED',
+    description: 'Master demo account with full platform-level role access.'
+  }),
+  makePersona({
     id: 'demo-advocate-1',
     name: 'Aarav Mehta',
     email: 'advocate.demo@lexsovereign.local',
@@ -52,6 +60,12 @@ export const DEMO_PERSONAS: DemoPersona[] = [
     description: 'Compliance/admin demo account for oversight-oriented UI.'
   })
 ]
+
+export const DEMO_MASTER_CREDENTIALS = {
+  email: 'master.demo@lexsovereign.local',
+  password: 'LexDemo@123',
+  personaId: 'demo-super-admin-1'
+} as const
 
 export function createDemoSessionForPersona(persona: DemoPersona): DemoSession {
   const now = new Date()

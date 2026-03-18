@@ -17,3 +17,33 @@ body {
   margin: 0 auto;
   padding: 0 1rem;
 }
+
+@layer components {
+  .page-shell {
+    @apply space-y-6;
+  }
+
+  .page-header {
+    @apply rounded-lg border bg-white p-5 shadow-sm;
+  }
+
+  .section-card {
+    @apply rounded-lg border bg-white p-5 shadow-sm;
+  }
+
+  .metric-card {
+    @apply rounded-lg border bg-white p-4 shadow-sm;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded bg-accent px-4 py-2 text-white;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded border px-4 py-2 text-slate-700;
+  }
+
+  .section-kicker {
+    @apply text-xs font-semibold uppercase tracking-[0.14em] text-slate-500;
+  }
+}

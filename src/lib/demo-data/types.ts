@@ -34,7 +34,7 @@ export type DemoDashboardCard = {
   title: string
   href: string
   description: string
-  role?: DemoRole
+  roles?: DemoRole[]
 }
 
 export type DemoAdvocateProfileSummary = {
@@ -54,6 +54,33 @@ export type DemoDashboardSnapshot = {
   role: DemoRole
   cards: DemoDashboardCard[]
   queue: DemoDashboardQueueItem[]
+  roleSummary: {
+    title: string
+    detail: string
+  }
+  urgentActions: Array<{
+    title: string
+    detail: string
+    priority: 'High' | 'Medium' | 'Routine'
+    href: string
+  }>
+  moduleOverview: Array<{
+    module: 'Matters' | 'Evidence' | 'Drafts' | 'Messages' | 'SOS'
+    metricLabel: string
+    value: string
+    status: 'Attention' | 'Stable' | 'Monitoring'
+    href: string
+  }>
+  recentActivity: Array<{
+    id: string
+    title: string
+    detail: string
+    occurredAt: string
+  }>
+  nextSteps: Array<{
+    label: string
+    href: string
+  }>
   advocateProfile?: DemoAdvocateProfileSummary
   clientBrief?: DemoClientBriefSummary
 }
