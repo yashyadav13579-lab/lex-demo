@@ -1,11 +1,17 @@
 import crypto from 'crypto'
-import type { PrismaClient } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { recordAudit } from './audit'
 
 type EvidenceSource = 'CLIENT_UPLOAD' | 'ADVOCATE_UPLOAD' | 'SYSTEM_GENERATED' | 'IMPORTED'
 type AccessEventType = 'VIEW' | 'DOWNLOAD' | 'EXPORT' | 'SHARE'
-type TxClient = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0]
+type EvidenceTx = {
+  evidenceItem: {
+    create: typeof prisma.evidenceItem.create
+  }
+  auditLog: {
+    create: typeof prisma.auditLog.create
+  }
+}
 
 export function hashBuffer(buffer: Buffer) {
   return crypto.createHash('sha256').update(buffer).digest('hex')
@@ -24,7 +30,7 @@ export async function registerEvidence(params: {
 }) {
   const hash = params.buffer ? hashBuffer(params.buffer) : crypto.randomBytes(16).toString('hex')
 
-  const evidence = await prisma.$transaction(async (tx: TxClient) => {
+  const evidence = await prisma.$transaction(async (tx: EvidenceTx) => {
     const createdEvidence = await tx.evidenceItem.create({
       data: {
         matterId: params.matterId,
