@@ -2,6 +2,9 @@ import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/api-response'
 import { type AppRole, hasGlobalScope, requireSessionUser } from '@/lib/api-auth'
 import { z } from 'zod'
+import { createRequestContext, finalizeRequest } from '@/lib/request-context'
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit'
+import { runWithIdempotency } from '@/lib/idempotency'
 
 const sosPatchSchema = z
   .object({
@@ -43,23 +46,27 @@ export async function GET(_request: Request, { params }: { params: { id: string 
 }
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+  const context = createRequestContext(request, 'PATCH /api/sos/:id')
   const auth = await requireSessionUser(['ADVOCATE', 'FIRM_MEMBER', 'FIRM_ADMIN', 'ADMIN', 'COMPLIANCE_ADMIN', 'SUPER_ADMIN'])
-  if (auth.errorResponse) return auth.errorResponse
+  if (auth.errorResponse) return finalizeRequest(context, auth.errorResponse)
+
+  const rate = checkRateLimit(`mut:${auth.user.id}:${getClientIp(request)}:sos:update`, 60, 60_000)
+  if (!rate.allowed) return finalizeRequest(context, apiError(429, 'Too many requests. Try again shortly.', 'BAD_REQUEST'))
 
   const body = await request.json().catch(() => null)
   const parsed = sosPatchSchema.safeParse(body)
   if (!parsed.success) {
-    return apiError(400, 'Invalid SOS update payload', 'INVALID_PAYLOAD')
+    return finalizeRequest(context, apiError(400, 'Invalid SOS update payload', 'INVALID_PAYLOAD'))
   }
 
   const incident = await prisma.sOSIncident.findUnique({
     where: { id: params.id },
     select: { id: true, advocateId: true }
   })
-  if (!incident) return apiError(404, 'SOS incident not found', 'NOT_FOUND')
+  if (!incident) return finalizeRequest(context, apiError(404, 'SOS incident not found', 'NOT_FOUND'))
 
   if (!canAccessIncident(auth.user.id, auth.user.role, incident.advocateId)) {
-    return apiError(404, 'SOS incident not found', 'NOT_FOUND')
+    return finalizeRequest(context, apiError(404, 'SOS incident not found', 'NOT_FOUND'))
   }
 
   const patchData: { status?: 'OPEN' | 'ACKNOWLEDGED' | 'CLOSED'; description?: string | null; acknowledgedAt?: Date; closedAt?: Date } =
@@ -71,13 +78,29 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   }
   if (Object.hasOwn(parsed.data, 'description')) patchData.description = parsed.data.description
 
+  const idempotencyKey = request.headers.get('idempotency-key')
   try {
-    const updated = await prisma.sOSIncident.update({
-      where: { id: params.id },
-      data: patchData
+    const result = await runWithIdempotency({
+      route: '/api/sos/:id',
+      method: 'PATCH',
+      actorKey: auth.user.id,
+      key: idempotencyKey,
+      payload: { id: params.id, ...patchData },
+      execute: async () => {
+        const updated = await prisma.sOSIncident.update({
+          where: { id: params.id },
+          data: patchData
+        })
+        return { status: 200, body: { ok: true, data: updated } }
+      }
     })
-    return apiSuccess(updated)
+    const response = new Response(JSON.stringify(result.body), {
+      status: result.status,
+      headers: { 'content-type': 'application/json' }
+    })
+    if (result.replayed) response.headers.set('x-idempotent-replay', 'true')
+    return finalizeRequest(context, response, { replayed: result.replayed })
   } catch {
-    return apiError(500, 'Unable to update SOS incident right now', 'INTERNAL_ERROR')
+    return finalizeRequest(context, apiError(500, 'Unable to update SOS incident right now', 'INTERNAL_ERROR'))
   }
 }

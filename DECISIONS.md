@@ -37,3 +37,6 @@
 - B6: Froze backend API contract at `v1` with envelope compatibility rules (additive changes only, no key renames/removals without version bump).
 - B6: Added integration matrix script (`check:backend:integration`) covering sign-up, credential auth, RBAC denial, ownership isolation, mutation authorization, and paginated envelope assertions.
 - B6: Added GitHub Actions CI gate with Postgres service, Prisma schema sync (`db push`), static quality checks, smoke checks, and integration matrix checks against a live app instance.
+- B7: Added optional idempotency support to mutation routes via `Idempotency-Key` with persisted response replay and conflict detection for key reuse with different payloads.
+- B7: Introduced structured request tracing for mutation routes (`x-request-id` propagation + JSON request logs with status/duration metadata) for better incident/debug visibility.
+- B7: Added safe in-process rate limiting on auth sign-up and mutation routes (returning `429` on abuse). This is intentionally process-local and should be paired with shared infrastructure limits in horizontally scaled production.

@@ -86,3 +86,16 @@ Run this before merging front-end changes:
   - Do not change response envelope keys (`ok`, `data`, `error`, `code`, `details`, `page`) without versioning.
   - New fields are additive only.
   - Mutation route permission changes must include an integration-matrix update.
+
+## B7 Security/Observability Additions
+
+- Idempotency:
+  - Mutation routes now accept optional `Idempotency-Key` header.
+  - Replayed requests return the original response with `x-idempotent-replay: true`.
+- Request tracing:
+  - Mutation routes emit `x-request-id` response header (reused from inbound `x-request-id` when provided).
+  - Structured API logs include request id, route, method, status, and duration.
+- Safe rate limiting (in-process):
+  - Applied to sign-up and mutation routes to reduce brute force / burst abuse.
+  - Returns `429` when bucket limits are exceeded.
+  - Note: current limiter is process-local; use shared Redis or gateway rate limiting for multi-instance production clusters.

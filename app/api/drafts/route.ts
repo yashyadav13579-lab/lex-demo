@@ -4,6 +4,9 @@ import { z } from 'zod'
 import { apiError, apiPaginatedSuccess, parseQueryLimit, parseQueryOffset } from '@/lib/api-response'
 import { assertMatterAccess, buildMatterAccessWhere, hasGlobalScope, requireSessionUser } from '@/lib/api-auth'
 import { prisma } from '@/lib/prisma'
+import { createRequestContext, finalizeRequest } from '@/lib/request-context'
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit'
+import { runWithIdempotency } from '@/lib/idempotency'
 
 const draftSchema = z.object({
   matterId: z.string().min(1),
@@ -13,32 +16,49 @@ const draftSchema = z.object({
 })
 
 export async function POST(request: Request) {
+  const context = createRequestContext(request, 'POST /api/drafts')
   const auth = await requireSessionUser(['ADVOCATE', 'FIRM_MEMBER', 'FIRM_ADMIN', 'SUPER_ADMIN'])
-  if (auth.errorResponse) return auth.errorResponse
+  if (auth.errorResponse) return finalizeRequest(context, auth.errorResponse)
+
+  const rate = checkRateLimit(`mut:${auth.user.id}:${getClientIp(request)}:drafts:create`, 90, 60_000)
+  if (!rate.allowed) {
+    return finalizeRequest(context, apiError(429, 'Too many requests. Try again shortly.', 'BAD_REQUEST'))
+  }
 
   const body = await request.json().catch(() => null)
   const parsed = draftSchema.safeParse(body)
   if (!parsed.success) {
-    return apiError(400, 'Invalid draft payload', 'INVALID_PAYLOAD')
+    return finalizeRequest(context, apiError(400, 'Invalid draft payload', 'INVALID_PAYLOAD'))
   }
 
   const access = await assertMatterAccess(auth.user, parsed.data.matterId, true)
-  if (access.errorResponse) return access.errorResponse
+  if (access.errorResponse) return finalizeRequest(context, access.errorResponse)
 
-  let draft
+  const idempotencyKey = request.headers.get('idempotency-key')
   try {
-    draft = await generateDraft({
-      matterId: parsed.data.matterId,
-      createdById: auth.user.id,
-      title: parsed.data.title,
-      template: parsed.data.template,
-      context: parsed.data.context as Record<string, unknown> | unknown[] | string | number | boolean | null | undefined
+    const result = await runWithIdempotency({
+      route: '/api/drafts',
+      method: 'POST',
+      actorKey: auth.user.id,
+      key: idempotencyKey,
+      payload: parsed.data,
+      execute: async () => {
+        const draft = await generateDraft({
+          matterId: parsed.data.matterId,
+          createdById: auth.user.id,
+          title: parsed.data.title,
+          template: parsed.data.template,
+          context: parsed.data.context as Record<string, unknown> | unknown[] | string | number | boolean | null | undefined
+        })
+        return { status: 200, body: draft }
+      }
     })
+    const response = NextResponse.json(result.body, { status: result.status })
+    if (result.replayed) response.headers.set('x-idempotent-replay', 'true')
+    return finalizeRequest(context, response, { replayed: result.replayed })
   } catch {
-    return apiError(500, 'Unable to generate draft right now', 'INTERNAL_ERROR')
+    return finalizeRequest(context, apiError(500, 'Unable to generate draft right now', 'INTERNAL_ERROR'))
   }
-
-  return NextResponse.json(draft)
 }
 
 export async function GET(request: Request) {

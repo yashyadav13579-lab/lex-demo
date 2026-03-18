@@ -4,6 +4,9 @@ import { z } from 'zod'
 import { apiError, apiPaginatedSuccess, parseQueryLimit, parseQueryOffset } from '@/lib/api-response'
 import { hasGlobalScope, requireSessionUser } from '@/lib/api-auth'
 import { prisma } from '@/lib/prisma'
+import { createRequestContext, finalizeRequest } from '@/lib/request-context'
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit'
+import { runWithIdempotency } from '@/lib/idempotency'
 
 const sosSchema = z.object({
   description: z.string().trim().max(1000).optional(),
@@ -12,28 +15,45 @@ const sosSchema = z.object({
 })
 
 export async function POST(request: Request) {
+  const context = createRequestContext(request, 'POST /api/sos')
   const auth = await requireSessionUser(['ADVOCATE', 'FIRM_MEMBER', 'FIRM_ADMIN', 'SUPER_ADMIN'])
-  if (auth.errorResponse) return auth.errorResponse
+  if (auth.errorResponse) return finalizeRequest(context, auth.errorResponse)
+
+  const rate = checkRateLimit(`mut:${auth.user.id}:${getClientIp(request)}:sos:create`, 20, 60_000)
+  if (!rate.allowed) {
+    return finalizeRequest(context, apiError(429, 'Too many requests. Try again shortly.', 'BAD_REQUEST'))
+  }
 
   const body = await request.json().catch(() => null)
   const parsed = sosSchema.safeParse(body)
   if (!parsed.success) {
-    return apiError(400, 'Invalid incident payload', 'INVALID_PAYLOAD')
+    return finalizeRequest(context, apiError(400, 'Invalid incident payload', 'INVALID_PAYLOAD'))
   }
 
-  let incident
+  const idempotencyKey = request.headers.get('idempotency-key')
   try {
-    incident = await createSOSIncident({
-      advocateId: auth.user.id,
-      description: parsed.data.description,
-      latitude: parsed.data.latitude,
-      longitude: parsed.data.longitude
+    const result = await runWithIdempotency({
+      route: '/api/sos',
+      method: 'POST',
+      actorKey: auth.user.id,
+      key: idempotencyKey,
+      payload: parsed.data,
+      execute: async () => {
+        const incident = await createSOSIncident({
+          advocateId: auth.user.id,
+          description: parsed.data.description,
+          latitude: parsed.data.latitude,
+          longitude: parsed.data.longitude
+        })
+        return { status: 200, body: incident }
+      }
     })
+    const response = NextResponse.json(result.body, { status: result.status })
+    if (result.replayed) response.headers.set('x-idempotent-replay', 'true')
+    return finalizeRequest(context, response, { replayed: result.replayed })
   } catch {
-    return apiError(500, 'Unable to create SOS incident right now', 'INTERNAL_ERROR')
+    return finalizeRequest(context, apiError(500, 'Unable to create SOS incident right now', 'INTERNAL_ERROR'))
   }
-
-  return NextResponse.json(incident)
 }
 
 export async function GET(request: Request) {

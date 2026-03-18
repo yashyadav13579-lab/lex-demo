@@ -4,6 +4,9 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { apiError, apiPaginatedSuccess, parseQueryLimit, parseQueryOffset } from '@/lib/api-response'
 import { buildMatterAccessWhere, requireSessionUser } from '@/lib/api-auth'
+import { createRequestContext, finalizeRequest } from '@/lib/request-context'
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit'
+import { runWithIdempotency } from '@/lib/idempotency'
 
 const matterSchema = z.object({
   title: z.string().trim().min(3).max(200),
@@ -63,28 +66,47 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const context = createRequestContext(request, 'POST /api/matters')
   const auth = await requireSessionUser(['ADVOCATE', 'FIRM_ADMIN', 'FIRM_MEMBER', 'SUPER_ADMIN'])
-  if (auth.errorResponse) return auth.errorResponse
+  if (auth.errorResponse) return finalizeRequest(context, auth.errorResponse, { auth: 'failed' })
+
+  const rate = checkRateLimit(`mut:${auth.user.id}:${getClientIp(request)}:matters:create`, 60, 60_000)
+  if (!rate.allowed) {
+    return finalizeRequest(context, apiError(429, 'Too many requests. Try again shortly.', 'BAD_REQUEST'))
+  }
 
   const body = await request.json().catch(() => null)
   const parsed = matterSchema.safeParse(body)
   if (!parsed.success) {
-    return apiError(400, 'Invalid matter payload', 'INVALID_PAYLOAD')
+    return finalizeRequest(context, apiError(400, 'Invalid matter payload', 'INVALID_PAYLOAD'))
   }
 
+  const idempotencyKey = request.headers.get('idempotency-key')
   try {
-    const matter = await createMatter({
-      title: parsed.data.title,
-      description: parsed.data.description,
-      clientId: parsed.data.clientId,
-      primaryAdvocateId: auth.user.id,
-      firmId: parsed.data.firmId,
-      proBono: parsed.data.proBono,
-      actorId: auth.user.id
+    const result = await runWithIdempotency({
+      route: '/api/matters',
+      method: 'POST',
+      actorKey: auth.user.id,
+      key: idempotencyKey,
+      payload: parsed.data,
+      execute: async () => {
+        const matter = await createMatter({
+          title: parsed.data.title,
+          description: parsed.data.description,
+          clientId: parsed.data.clientId,
+          primaryAdvocateId: auth.user.id,
+          firmId: parsed.data.firmId,
+          proBono: parsed.data.proBono,
+          actorId: auth.user.id
+        })
+        return { status: 201, body: matter }
+      }
     })
 
-    return NextResponse.json(matter, { status: 201 })
+    const response = NextResponse.json(result.body, { status: result.status })
+    if (result.replayed) response.headers.set('x-idempotent-replay', 'true')
+    return finalizeRequest(context, response, { replayed: result.replayed })
   } catch {
-    return apiError(500, 'Unable to create matter right now', 'INTERNAL_ERROR')
+    return finalizeRequest(context, apiError(500, 'Unable to create matter right now', 'INTERNAL_ERROR'))
   }
 }

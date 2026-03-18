@@ -4,6 +4,9 @@ import { z } from 'zod'
 import { apiError, apiPaginatedSuccess, parseQueryLimit, parseQueryOffset } from '@/lib/api-response'
 import { assertMatterAccess, buildMatterAccessWhere, hasGlobalScope, requireSessionUser } from '@/lib/api-auth'
 import { prisma } from '@/lib/prisma'
+import { createRequestContext, finalizeRequest } from '@/lib/request-context'
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit'
+import { runWithIdempotency } from '@/lib/idempotency'
 
 const evidenceSchema = z.object({
   matterId: z.string().min(1),
@@ -16,38 +19,55 @@ const evidenceSchema = z.object({
 })
 
 export async function POST(request: Request) {
+  const context = createRequestContext(request, 'POST /api/evidence')
   const auth = await requireSessionUser(['CLIENT', 'ADVOCATE', 'FIRM_MEMBER', 'FIRM_ADMIN', 'SUPER_ADMIN'])
-  if (auth.errorResponse) return auth.errorResponse
+  if (auth.errorResponse) return finalizeRequest(context, auth.errorResponse)
+
+  const rate = checkRateLimit(`mut:${auth.user.id}:${getClientIp(request)}:evidence:create`, 90, 60_000)
+  if (!rate.allowed) {
+    return finalizeRequest(context, apiError(429, 'Too many requests. Try again shortly.', 'BAD_REQUEST'))
+  }
 
   const body = await request.json().catch(() => null)
   const parsed = evidenceSchema.safeParse(body)
   if (!parsed.success) {
-    return apiError(400, 'Invalid evidence payload', 'INVALID_PAYLOAD')
+    return finalizeRequest(context, apiError(400, 'Invalid evidence payload', 'INVALID_PAYLOAD'))
   }
 
   const access = await assertMatterAccess(auth.user, parsed.data.matterId, true)
-  if (access.errorResponse) return access.errorResponse
+  if (access.errorResponse) return finalizeRequest(context, access.errorResponse)
 
   const { matterId, filename, mimeType, sizeBytes, storageUrl, tags, base64 } = parsed.data
 
   const buffer = base64 ? Buffer.from(base64, 'base64') : undefined
-  let evidence
+  const idempotencyKey = request.headers.get('idempotency-key')
   try {
-    evidence = await registerEvidence({
-      matterId,
-      uploadedById: auth.user.id,
-      filename,
-      mimeType,
-      sizeBytes,
-      storageUrl,
-      buffer,
-      tags
+    const result = await runWithIdempotency({
+      route: '/api/evidence',
+      method: 'POST',
+      actorKey: auth.user.id,
+      key: idempotencyKey,
+      payload: parsed.data,
+      execute: async () => {
+        const evidence = await registerEvidence({
+          matterId,
+          uploadedById: auth.user.id,
+          filename,
+          mimeType,
+          sizeBytes,
+          storageUrl,
+          buffer,
+          tags
+        })
+        return { status: 200, body: evidence }
+      }
     })
+    const response = NextResponse.json(result.body, { status: result.status })
+    if (result.replayed) response.headers.set('x-idempotent-replay', 'true')
+    return finalizeRequest(context, response, { replayed: result.replayed })
   } catch {
-    return apiError(500, 'Unable to register evidence right now', 'INTERNAL_ERROR')
+    return finalizeRequest(context, apiError(500, 'Unable to register evidence right now', 'INTERNAL_ERROR'))
   }
-
-  return NextResponse.json(evidence)
 }
 
 export async function GET(request: Request) {
