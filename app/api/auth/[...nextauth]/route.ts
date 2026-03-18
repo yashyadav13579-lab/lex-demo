@@ -1,6 +1,25 @@
-import NextAuth from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { isDemoAuthEnabled } from '@/lib/demo-auth'
 
-const handler = NextAuth(authOptions)
+async function handleDemoAwareAuth(request: Request, context: unknown) {
+  if (isDemoAuthEnabled()) {
+    return Response.json(
+      {
+        error: 'Demo auth mode is enabled. NextAuth API routes are disabled in this environment.'
+      },
+      { status: 404 }
+    )
+  }
 
-export { handler as GET, handler as POST }
+  const NextAuth = (await import('next-auth')).default
+  const { authOptions } = await import('@/lib/auth')
+  const handler = NextAuth(authOptions)
+  return handler(request, context as never)
+}
+
+export async function GET(request: Request, context: unknown) {
+  return handleDemoAwareAuth(request, context)
+}
+
+export async function POST(request: Request, context: unknown) {
+  return handleDemoAwareAuth(request, context)
+}

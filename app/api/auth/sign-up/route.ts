@@ -1,11 +1,19 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { hash } from 'bcryptjs'
+import { isDemoAuthEnabled } from '@/lib/demo-auth'
 
 const ALLOWED_ROLES = ['CLIENT', 'ADVOCATE', 'FIRM_ADMIN', 'FIRM_MEMBER'] as const
 type Role = (typeof ALLOWED_ROLES)[number]
 
 export async function POST(request: Request) {
+  if (isDemoAuthEnabled()) {
+    return NextResponse.json(
+      { ok: true, demo: true, message: 'Demo mode: sign-up is preview-only and does not create accounts.' },
+      { status: 200 }
+    )
+  }
+
   const data = await request.json()
   const { name, email, password, role } = data || {}
 
