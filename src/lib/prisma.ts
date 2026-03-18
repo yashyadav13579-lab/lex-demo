@@ -1,8 +1,9 @@
-import { Prisma, PrismaClient } from '@prisma/client'
+import { PrismaClient } from '@prisma/client'
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined }
 const isDemoMode = process.env.NEXT_PUBLIC_DEMO_AUTH_ENABLED === 'true'
-const prismaLogLevels: Prisma.LogLevel[] =
+type PrismaLogLevel = 'info' | 'query' | 'warn' | 'error'
+const prismaLogLevels: PrismaLogLevel[] =
   process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error']
 
 function createDemoPrismaStub(): PrismaClient {
