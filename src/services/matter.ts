@@ -1,6 +1,18 @@
 import { prisma } from '@/lib/prisma'
 import { recordAudit } from './audit'
 
+type MatterTx = {
+  matter: {
+    create: typeof prisma.matter.create
+  }
+  matterAssignment: {
+    create: typeof prisma.matterAssignment.create
+  }
+  auditLog: {
+    create: typeof prisma.auditLog.create
+  }
+}
+
 export async function createMatter(params: {
   title: string
   description?: string
@@ -10,7 +22,7 @@ export async function createMatter(params: {
   proBono?: boolean
   actorId: string
 }) {
-  const matter = await prisma.$transaction(async (tx) => {
+  const matter = await prisma.$transaction(async (tx: MatterTx) => {
     const createdMatter = await tx.matter.create({
       data: {
         title: params.title,
