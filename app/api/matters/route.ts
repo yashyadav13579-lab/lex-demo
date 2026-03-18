@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createMatter } from '@/services/matter'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { requiresRoles } from '@/lib/rbac'
+import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { apiError, apiSuccess, parseQueryLimit } from '@/lib/api-response'
+import { buildMatterAccessWhere, requireSessionUser } from '@/lib/api-auth'
 
 const matterSchema = z.object({
   title: z.string().trim().min(3).max(200),
@@ -13,28 +13,69 @@ const matterSchema = z.object({
   proBono: z.boolean().optional()
 })
 
-export async function POST(request: Request) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!requiresRoles(session.user.role, ['ADVOCATE', 'FIRM_ADMIN', 'FIRM_MEMBER', 'SUPER_ADMIN'])) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+const MATTER_STATUSES = ['DRAFT', 'OPEN', 'PAUSED', 'CLOSED', 'ARCHIVED'] as const
+type MatterStatus = (typeof MATTER_STATUSES)[number]
+
+export async function GET(request: Request) {
+  const auth = await requireSessionUser([
+    'CLIENT',
+    'ADVOCATE',
+    'FIRM_MEMBER',
+    'FIRM_ADMIN',
+    'REVIEWER',
+    'ADMIN',
+    'COMPLIANCE_ADMIN',
+    'SUPER_ADMIN'
+  ])
+  if (auth.errorResponse) return auth.errorResponse
+
+  const { searchParams } = new URL(request.url)
+  const limit = parseQueryLimit(searchParams)
+  const rawStatus = searchParams.get('status')?.toUpperCase()
+  const status = rawStatus && MATTER_STATUSES.includes(rawStatus as MatterStatus) ? (rawStatus as MatterStatus) : null
+
+  const where = {
+    ...buildMatterAccessWhere(auth.user),
+    ...(status ? { status } : {})
   }
+
+  const matters = await prisma.matter.findMany({
+    where,
+    orderBy: { updatedAt: 'desc' },
+    take: limit,
+    include: {
+      client: { select: { id: true, name: true, email: true } },
+      primaryAdvocate: { select: { id: true, name: true, email: true } },
+      _count: { select: { evidenceItems: true, drafts: true, tasks: true } }
+    }
+  })
+
+  return apiSuccess({ items: matters })
+}
+
+export async function POST(request: Request) {
+  const auth = await requireSessionUser(['ADVOCATE', 'FIRM_ADMIN', 'FIRM_MEMBER', 'SUPER_ADMIN'])
+  if (auth.errorResponse) return auth.errorResponse
 
   const body = await request.json().catch(() => null)
   const parsed = matterSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Invalid matter payload' }, { status: 400 })
+    return apiError(400, 'Invalid matter payload', 'INVALID_PAYLOAD')
   }
 
-  const matter = await createMatter({
-    title: parsed.data.title,
-    description: parsed.data.description,
-    clientId: parsed.data.clientId,
-    primaryAdvocateId: session.user.id,
-    firmId: parsed.data.firmId,
-    proBono: parsed.data.proBono,
-    actorId: session.user.id
-  })
+  try {
+    const matter = await createMatter({
+      title: parsed.data.title,
+      description: parsed.data.description,
+      clientId: parsed.data.clientId,
+      primaryAdvocateId: auth.user.id,
+      firmId: parsed.data.firmId,
+      proBono: parsed.data.proBono,
+      actorId: auth.user.id
+    })
 
-  return NextResponse.json(matter)
+    return NextResponse.json(matter, { status: 201 })
+  } catch {
+    return apiError(500, 'Unable to create matter right now', 'INTERNAL_ERROR')
+  }
 }

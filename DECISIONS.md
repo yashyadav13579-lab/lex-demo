@@ -24,3 +24,7 @@
 - V6: Differentiated SOS, Evidence, Drafts, and Messages with module-specific operational boards (status lanes, provenance register, validation pipeline, collaboration channels) to reinforce product identity without backend feature inflation.
 - V7: Added global UI primitives (`page-shell`, `page-header`, `section-card`, `metric-card`, and normalized button classes) and applied them across key visible pages to tighten spacing rhythm and surface consistency without architectural changes.
 - V7.1: Removed residual scaffold/placeholder language and completed a primitive-class cleanup on remaining visible routes (matter creation, matter detail, intake summary, demo module pages) to improve premium consistency before backend hydration.
+- B3: Standardized API responses with shared helpers so backend routes now return a consistent envelope for list/detail endpoints and structured error codes for auth/validation/server failures.
+- B3: Added explicit matter-access ownership checks for evidence/draft write paths to block cross-matter writes unless the user is assigned, primary advocate, same-firm member, or global admin scope.
+- B3: Chose `404` on failed matter access checks (instead of `403`) to reduce matter-id enumeration risk in authenticated contexts.
+- B3: Intake history read access is currently limited to the client owner or global compliance/admin roles until assignment-level intake visibility rules are defined.

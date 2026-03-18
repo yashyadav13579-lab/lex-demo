@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { createSOSIncident } from '@/services/sos'
-import { requiresRoles } from '@/lib/rbac'
 import { z } from 'zod'
+import { apiError, apiSuccess, parseQueryLimit } from '@/lib/api-response'
+import { hasGlobalScope, requireSessionUser } from '@/lib/api-auth'
+import { prisma } from '@/lib/prisma'
 
 const sosSchema = z.object({
   description: z.string().trim().max(1000).optional(),
@@ -12,24 +12,49 @@ const sosSchema = z.object({
 })
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!requiresRoles(session.user.role, ['ADVOCATE', 'FIRM_MEMBER', 'FIRM_ADMIN', 'SUPER_ADMIN'])) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  const auth = await requireSessionUser(['ADVOCATE', 'FIRM_MEMBER', 'FIRM_ADMIN', 'SUPER_ADMIN'])
+  if (auth.errorResponse) return auth.errorResponse
 
   const body = await request.json().catch(() => null)
   const parsed = sosSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Invalid incident payload' }, { status: 400 })
+    return apiError(400, 'Invalid incident payload', 'INVALID_PAYLOAD')
   }
 
   const incident = await createSOSIncident({
-    advocateId: session.user.id,
+    advocateId: auth.user.id,
     description: parsed.data.description,
     latitude: parsed.data.latitude,
     longitude: parsed.data.longitude
   })
 
   return NextResponse.json(incident)
+}
+
+export async function GET(request: Request) {
+  const auth = await requireSessionUser([
+    'ADVOCATE',
+    'FIRM_MEMBER',
+    'FIRM_ADMIN',
+    'REVIEWER',
+    'ADMIN',
+    'COMPLIANCE_ADMIN',
+    'SUPER_ADMIN'
+  ])
+  if (auth.errorResponse) return auth.errorResponse
+
+  const { searchParams } = new URL(request.url)
+  const limit = parseQueryLimit(searchParams)
+
+  const incidents = await prisma.sOSIncident.findMany({
+    where: hasGlobalScope(auth.user.role) ? {} : { advocateId: auth.user.id },
+    include: {
+      advocate: { select: { id: true, name: true, email: true, role: true } },
+      media: true
+    },
+    orderBy: { triggeredAt: 'desc' },
+    take: limit
+  })
+
+  return apiSuccess({ items: incidents })
 }
