@@ -1,5 +1,4 @@
 import { prisma } from '@/lib/prisma'
-import { Prisma } from '@prisma/client'
 import { recordAudit } from './audit'
 
 export async function createMatter(params: {
