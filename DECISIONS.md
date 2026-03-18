@@ -40,3 +40,6 @@
 - B7: Added optional idempotency support to mutation routes via `Idempotency-Key` with persisted response replay and conflict detection for key reuse with different payloads.
 - B7: Introduced structured request tracing for mutation routes (`x-request-id` propagation + JSON request logs with status/duration metadata) for better incident/debug visibility.
 - B7: Added safe in-process rate limiting on auth sign-up and mutation routes (returning `429` on abuse). This is intentionally process-local and should be paired with shared infrastructure limits in horizontally scaled production.
+- B8: Upgraded rate limiting to prefer Upstash Redis REST for shared, multi-instance enforcement while retaining in-memory fallback for local/dev resilience.
+- B8: Added DB-backed Prisma migration for `ApiIdempotencyKey` and introduced a TTL cleanup pathway (script + protected internal API route + Vercel cron schedule).
+- B8: Added pluggable error sinks for `5xx` events with request-id correlation, preferring OTel HTTP endpoint and falling back to Sentry DSN integration when configured.

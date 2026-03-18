@@ -83,7 +83,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   const access = await assertMatterAccess(auth.user, params.id, true)
   if (access.errorResponse) return finalizeRequest(context, access.errorResponse)
 
-  const rate = checkRateLimit(`mut:${auth.user.id}:${getClientIp(request)}:matters:update`, 90, 60_000)
+  const rate = await checkRateLimit(`mut:${auth.user.id}:${getClientIp(request)}:matters:update`, 90, 60_000)
   if (!rate.allowed) {
     return finalizeRequest(context, apiError(429, 'Too many requests. Try again shortly.', 'BAD_REQUEST'))
   }
@@ -129,7 +129,7 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
   const access = await assertMatterAccess(auth.user, params.id, true)
   if (access.errorResponse) return finalizeRequest(context, access.errorResponse)
 
-  const rate = checkRateLimit(`mut:${auth.user.id}:${getClientIp(_request)}:matters:delete`, 60, 60_000)
+  const rate = await checkRateLimit(`mut:${auth.user.id}:${getClientIp(_request)}:matters:delete`, 60, 60_000)
   if (!rate.allowed) {
     return finalizeRequest(context, apiError(429, 'Too many requests. Try again shortly.', 'BAD_REQUEST'))
   }

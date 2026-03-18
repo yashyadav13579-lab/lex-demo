@@ -48,7 +48,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   const auth = await requireSessionUser(['ADVOCATE', 'FIRM_MEMBER', 'FIRM_ADMIN', 'ADMIN', 'COMPLIANCE_ADMIN', 'SUPER_ADMIN'])
   if (auth.errorResponse) return finalizeRequest(context, auth.errorResponse)
 
-  const rate = checkRateLimit(`mut:${auth.user.id}:${getClientIp(request)}:evidence:update`, 90, 60_000)
+  const rate = await checkRateLimit(`mut:${auth.user.id}:${getClientIp(request)}:evidence:update`, 90, 60_000)
   if (!rate.allowed) return finalizeRequest(context, apiError(429, 'Too many requests. Try again shortly.', 'BAD_REQUEST'))
 
   const body = await request.json().catch(() => null)
@@ -98,7 +98,7 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
   const auth = await requireSessionUser(['ADVOCATE', 'FIRM_MEMBER', 'FIRM_ADMIN', 'ADMIN', 'COMPLIANCE_ADMIN', 'SUPER_ADMIN'])
   if (auth.errorResponse) return finalizeRequest(context, auth.errorResponse)
 
-  const rate = checkRateLimit(`mut:${auth.user.id}:${getClientIp(_request)}:evidence:delete`, 60, 60_000)
+  const rate = await checkRateLimit(`mut:${auth.user.id}:${getClientIp(_request)}:evidence:delete`, 60, 60_000)
   if (!rate.allowed) return finalizeRequest(context, apiError(429, 'Too many requests. Try again shortly.', 'BAD_REQUEST'))
 
   const item = await prisma.evidenceItem.findUnique({

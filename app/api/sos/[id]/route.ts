@@ -50,7 +50,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   const auth = await requireSessionUser(['ADVOCATE', 'FIRM_MEMBER', 'FIRM_ADMIN', 'ADMIN', 'COMPLIANCE_ADMIN', 'SUPER_ADMIN'])
   if (auth.errorResponse) return finalizeRequest(context, auth.errorResponse)
 
-  const rate = checkRateLimit(`mut:${auth.user.id}:${getClientIp(request)}:sos:update`, 60, 60_000)
+  const rate = await checkRateLimit(`mut:${auth.user.id}:${getClientIp(request)}:sos:update`, 60, 60_000)
   if (!rate.allowed) return finalizeRequest(context, apiError(429, 'Too many requests. Try again shortly.', 'BAD_REQUEST'))
 
   const body = await request.json().catch(() => null)

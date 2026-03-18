@@ -23,7 +23,7 @@ const signUpSchema = z.object({
 export async function POST(request: Request) {
   const context = createRequestContext(request, 'POST /api/auth/sign-up')
   const ip = getClientIp(request)
-  const rate = checkRateLimit(`signup:${ip}`, 10, 60_000)
+  const rate = await checkRateLimit(`signup:${ip}`, 10, 60_000)
   if (!rate.allowed) {
     return finalizeRequest(
       context,
@@ -56,22 +56,22 @@ export async function POST(request: Request) {
   const password = parsed.data.password
   const role = parsed.data.role
 
-  const existing = await prisma.user.findUnique({ where: { email } })
-  if (existing) {
-    return finalizeRequest(context, NextResponse.json({ error: 'Email is already registered' }, { status: 409 }))
-  }
-
   const idempotencyKey = request.headers.get('idempotency-key')
   const actorKey = `signup:${email}`
-  let idempotent: { status: number; body: { ok?: boolean; error?: string }; replayed: boolean }
+  let idempotent: { status: number; body: { ok: boolean; error?: string }; replayed: boolean }
   try {
-    idempotent = await runWithIdempotency({
+    idempotent = await runWithIdempotency<{ ok: boolean; error?: string }>({
       route: '/api/auth/sign-up',
       method: 'POST',
       actorKey,
       key: idempotencyKey,
       payload: { name, email, role: role ?? 'CLIENT' },
       execute: async () => {
+        const existing = await prisma.user.findUnique({ where: { email } })
+        if (existing) {
+          return { status: 409, body: { ok: false, error: 'Email is already registered' } }
+        }
+
         const passwordHash = await hash(password, 10)
         const normalizedRole: Role = ALLOWED_ROLES.includes(role as Role) ? (role as Role) : 'CLIENT'
         const user = await prisma.user.create({

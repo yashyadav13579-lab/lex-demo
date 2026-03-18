@@ -28,6 +28,7 @@ Tech stack: Next.js (App Router) + TypeScript + Tailwind + Prisma + Postgres + N
 - `npm run check:backend` - Run lightweight backend smoke checks against a running local server
 - `npm run check:backend:integration` - Run auth/RBAC/ownership integration matrix against a running local server
 - `npm run check:ci` - Run static CI quality gate (`lint` + `tsc --noEmit` + `build`)
+- `npm run cleanup:idempotency` - Delete expired idempotency records based on `IDEMPOTENCY_TTL_HOURS`
 - `npm run prisma:generate` - Generate Prisma client
 - `npm run prisma:migrate` - Run Prisma dev migrations
 - `npm run prisma:studio` - Open Prisma Studio
@@ -99,3 +100,16 @@ Run this before merging front-end changes:
   - Applied to sign-up and mutation routes to reduce brute force / burst abuse.
   - Returns `429` when bucket limits are exceeded.
   - Note: current limiter is process-local; use shared Redis or gateway rate limiting for multi-instance production clusters.
+
+## B8 Production Hardening
+
+- Shared rate limiting:
+  - If `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are set, rate limits are enforced in Redis (shared across instances).
+  - If not set, the app falls back to local in-memory rate limits for development continuity.
+- Idempotency data lifecycle:
+  - `ApiIdempotencyKey` has a DB migration under `prisma/migrations/20260319020000_b8_idempotency_key`.
+  - Cleanup endpoint: `GET /api/internal/cleanup-idempotency` (requires `Authorization: Bearer <CRON_SECRET>`).
+  - Vercel cron is configured in `vercel.json` to run daily at `03:00 UTC`.
+- Error sink:
+  - `x-request-id` is propagated and used in structured logs.
+  - Errors (`5xx`) can be forwarded to OTel via `OTEL_LOGS_ENDPOINT` (and optional `OTEL_LOGS_AUTH_HEADER`) or to Sentry via `SENTRY_DSN`.

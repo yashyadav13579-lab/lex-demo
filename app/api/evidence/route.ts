@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   const auth = await requireSessionUser(['CLIENT', 'ADVOCATE', 'FIRM_MEMBER', 'FIRM_ADMIN', 'SUPER_ADMIN'])
   if (auth.errorResponse) return finalizeRequest(context, auth.errorResponse)
 
-  const rate = checkRateLimit(`mut:${auth.user.id}:${getClientIp(request)}:evidence:create`, 90, 60_000)
+  const rate = await checkRateLimit(`mut:${auth.user.id}:${getClientIp(request)}:evidence:create`, 90, 60_000)
   if (!rate.allowed) {
     return finalizeRequest(context, apiError(429, 'Too many requests. Try again shortly.', 'BAD_REQUEST'))
   }

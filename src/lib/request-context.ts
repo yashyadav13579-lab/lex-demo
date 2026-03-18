@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto'
+import { emitErrorEvent } from './error-sink'
 
 export type RequestContext = {
   requestId: string
@@ -35,6 +36,18 @@ export function finalizeRequest(
       ...meta
     })
   )
+
+  if (response.status >= 500) {
+    void emitErrorEvent({
+      requestId: context.requestId,
+      route: context.route,
+      method: context.method,
+      status: response.status,
+      durationMs,
+      message: `API request failed with status ${response.status}`,
+      meta
+    })
+  }
 
   return response
 }
