@@ -26,9 +26,10 @@ class CookieJar {
   }
 }
 
-async function request(path, { method = 'GET', body, json = false, jar } = {}) {
+async function request(path, { method = 'GET', body, json = false, jar, headers: extraHeaders = {}, redirect } = {}) {
   const headers = {}
   if (json) headers['Content-Type'] = 'application/json'
+  Object.assign(headers, extraHeaders)
   if (jar) {
     const cookie = jar.toHeader()
     if (cookie) headers.Cookie = cookie
@@ -37,11 +38,28 @@ async function request(path, { method = 'GET', body, json = false, jar } = {}) {
   const response = await fetch(`${BASE_URL}${path}`, {
     method,
     headers,
-    body: json ? JSON.stringify(body) : body
+    body: json ? JSON.stringify(body) : body,
+    redirect
   })
   if (jar) jar.applyFromResponse(response)
   const payload = await response.json().catch(() => null)
   return { response, payload }
+}
+
+async function expectUnauthorized(path) {
+  // Next dev can briefly return 500 during recompilation; retry a few times before failing.
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const { response, payload } = await request(path)
+    if (response.status === 401) {
+      assertUnauthorizedEnvelope(payload, path)
+      return
+    }
+    if (attempt < 3 && response.status >= 500) {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      continue
+    }
+    throw new Error(`Expected 401 for ${path}, got ${response.status}. Body: ${JSON.stringify(payload)}`)
+  }
 }
 
 function assert(condition, message) {
@@ -72,20 +90,30 @@ async function signInWithCredentials(email, password) {
   const signInRes = await request('/api/auth/callback/credentials', {
     method: 'POST',
     body: form.toString(),
-    jar
+    jar,
+    redirect: 'manual',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
   })
 
-  assert(signInRes.response.status === 200, `Expected sign-in 200 for ${email}, got ${signInRes.response.status}`)
-  assert(typeof signInRes.payload?.url === 'string', `Missing callback url after sign-in for ${email}`)
+  const status = signInRes.response.status
+  const location = signInRes.response.headers.get('location')
+  const hasSessionCookie = jar.store.has('next-auth.session-token') || jar.store.has('__Secure-next-auth.session-token')
+  const isJsonMode = status === 200 && typeof signInRes.payload?.url === 'string'
+  const isRedirectMode = [302, 303].includes(status) && typeof location === 'string'
+  assert(isJsonMode || isRedirectMode, `Unexpected sign-in response for ${email}: ${status}`)
+  assert(hasSessionCookie, `Missing session cookie after sign-in for ${email}`)
+
+  const sessionRes = await request('/api/auth/session', { jar })
+  assert(sessionRes.response.status === 200, `Expected /api/auth/session 200 after sign-in for ${email}, got ${sessionRes.response.status}`)
+  assert(sessionRes.payload?.user?.email === email, `Session email mismatch after sign-in for ${email}`)
+
   return jar
 }
 
 async function main() {
   // 1) Unauthorized matrix
   for (const path of ['/api/matters', '/api/evidence', '/api/drafts', '/api/intake', '/api/sos']) {
-    const { response, payload } = await request(path)
-    assert(response.status === 401, `Expected 401 for ${path}, got ${response.status}`)
-    assertUnauthorizedEnvelope(payload, path)
+    await expectUnauthorized(path)
   }
 
   // 2) Create identities
