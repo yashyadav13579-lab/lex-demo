@@ -43,3 +43,5 @@
 - B8: Upgraded rate limiting to prefer Upstash Redis REST for shared, multi-instance enforcement while retaining in-memory fallback for local/dev resilience.
 - B8: Added DB-backed Prisma migration for `ApiIdempotencyKey` and introduced a TTL cleanup pathway (script + protected internal API route + Vercel cron schedule).
 - B8: Added pluggable error sinks for `5xx` events with request-id correlation, preferring OTel HTTP endpoint and falling back to Sentry DSN integration when configured.
+- B9: Added a protected deployment-status endpoint for post-deploy verification of critical environment wiring without exposing secret values.
+- B9: Added deployment validation script (`check:deployment`) to assert session route health, internal endpoint auth protection, cron-secret access, and idempotency replay behavior on deployed environments.

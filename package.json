@@ -11,6 +11,7 @@
     "check:frontend": "npm run lint && npm run check:links",
     "check:backend": "node scripts/smoke-backend.mjs",
     "check:backend:integration": "node scripts/integration-auth-rbac.mjs",
+    "check:deployment": "node scripts/check-deployment.mjs",
     "check:ci": "npm run lint && npx tsc --noEmit && npm run build",
     "cleanup:idempotency": "tsx scripts/cleanup-idempotency.ts",
     "prisma:generate": "prisma generate",

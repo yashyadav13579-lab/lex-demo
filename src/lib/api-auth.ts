@@ -1,4 +1,3 @@
-import { Prisma } from '@prisma/client'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -41,7 +40,7 @@ export async function requireSessionUser(allowedRoles?: AppRole[]) {
   return { user }
 }
 
-export function buildMatterAccessWhere(user: SessionUser): Prisma.MatterWhereInput {
+export function buildMatterAccessWhere(user: SessionUser) {
   if (hasGlobalScope(user.role)) return {}
 
   if (user.role === 'CLIENT') {
@@ -62,7 +61,7 @@ export async function assertMatterAccess(user: SessionUser, matterId: string, wr
     return { errorResponse: apiError(403, 'Forbidden', 'FORBIDDEN') }
   }
 
-  const where: Prisma.MatterWhereInput = {
+  const where = {
     id: matterId,
     ...buildMatterAccessWhere(user)
   }

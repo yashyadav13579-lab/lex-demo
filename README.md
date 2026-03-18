@@ -27,6 +27,7 @@ Tech stack: Next.js (App Router) + TypeScript + Tailwind + Prisma + Postgres + N
 - `npm run check:frontend` - Run front-end baseline checks (`lint` + `check:links`)
 - `npm run check:backend` - Run lightweight backend smoke checks against a running local server
 - `npm run check:backend:integration` - Run auth/RBAC/ownership integration matrix against a running local server
+- `npm run check:deployment` - Validate deployed environment wiring and protected internal endpoints
 - `npm run check:ci` - Run static CI quality gate (`lint` + `tsc --noEmit` + `build`)
 - `npm run cleanup:idempotency` - Delete expired idempotency records based on `IDEMPOTENCY_TTL_HOURS`
 - `npm run prisma:generate` - Generate Prisma client
@@ -113,3 +114,31 @@ Run this before merging front-end changes:
 - Error sink:
   - `x-request-id` is propagated and used in structured logs.
   - Errors (`5xx`) can be forwarded to OTel via `OTEL_LOGS_ENDPOINT` (and optional `OTEL_LOGS_AUTH_HEADER`) or to Sentry via `SENTRY_DSN`.
+
+## B9 Deployment Hardening Runbook
+
+1) Vercel envs (set for Preview and Production):
+- `DATABASE_URL`
+- `NEXTAUTH_SECRET`
+- `NEXTAUTH_URL` (use deployment domain)
+- `NEXT_PUBLIC_DEMO_AUTH_ENABLED` (`false` for real backend mode)
+- `UPSTASH_REDIS_REST_URL`
+- `UPSTASH_REDIS_REST_TOKEN`
+- `CRON_SECRET`
+- Optional sinks:
+  - `OTEL_LOGS_ENDPOINT`
+  - `OTEL_LOGS_AUTH_HEADER`
+  - `SENTRY_DSN`
+
+2) Deploy and validate:
+- Run backend checks against deployment:
+  - `BASE_URL=https://<deployment-domain> CRON_SECRET=<cron-secret> npm run check:deployment`
+- Internal protected verification endpoints:
+  - `GET /api/internal/deployment-status` (Bearer `CRON_SECRET`)
+  - `GET /api/internal/cleanup-idempotency` (Bearer `CRON_SECRET`)
+
+3) Expected outcome:
+- `/api/auth/session` returns `200`
+- internal endpoints reject unauthenticated requests (`401`)
+- internal endpoints succeed with valid bearer secret (`200`)
+- idempotency replay on sign-up returns `x-idempotent-replay: true`
