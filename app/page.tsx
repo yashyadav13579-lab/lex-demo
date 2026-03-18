@@ -1,3 +1,5 @@
+import Link from 'next/link'
+
 export default function HomePage() {
   return (
     <div className="space-y-8">
@@ -9,8 +11,12 @@ export default function HomePage() {
           evidence integrity, and neutral discovery at the core.
         </p>
         <div className="flex gap-3">
-          <a className="px-4 py-2 bg-accent text-white rounded" href="/auth/sign-up">Get started</a>
-          <a className="px-4 py-2 border rounded" href="/pricing">View pricing</a>
+          <Link className="px-4 py-2 bg-accent text-white rounded" href="/auth/sign-up">
+            Get started
+          </Link>
+          <Link className="px-4 py-2 border rounded" href="/pricing">
+            View pricing
+          </Link>
         </div>
       </section>
       <section className="grid md:grid-cols-3 gap-4">

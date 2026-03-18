@@ -1,6 +1,14 @@
 import './globals.css'
 import { ReactNode } from 'react'
+import Link from 'next/link'
+import { Inter } from 'next/font/google'
 import { Providers } from './providers'
+import { HeaderNav } from './header-nav'
+
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap'
+})
 
 export const metadata = {
   title: 'LexSovereign',
@@ -10,17 +18,15 @@ export const metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-slate-50 text-slate-900">
-        <Providers>
+      <body className={`${inter.className} bg-slate-50 text-slate-900 antialiased`}>
+        <Providers session={null}>
           <div className="min-h-screen">
             <header className="border-b bg-white">
               <div className="container py-4 flex items-center justify-between">
-                <div className="text-lg font-semibold">LexSovereign</div>
-                <nav className="flex gap-4 text-sm text-slate-600">
-                  <a href="/pricing">Pricing</a>
-                  <a href="/auth/sign-in">Sign in</a>
-                  <a href="/auth/sign-up" className="text-accent font-medium">Get started</a>
-                </nav>
+                <Link href="/" className="text-lg font-semibold">
+                  LexSovereign
+                </Link>
+                <HeaderNav />
               </div>
             </header>
             <main className="container py-8">{children}</main>

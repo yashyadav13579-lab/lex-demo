@@ -1,1 +1,60 @@
-# LexSovereign\n\nAdvocate-first safety & workflow OS. Tech stack: Next.js (App Router) + TypeScript + Tailwind + Prisma + Postgres + NextAuth. This repo ships foundations for verification, intake, matters, evidence integrity, AI drafting with counsel validation, SOS, messaging, discovery, and admin/compliance queues.\n\n## Quick start\n1) Copy `.env.example` to `.env.local` and set `DATABASE_URL`, `NEXTAUTH_SECRET`.\n2) Install deps: `npm install` (or `pnpm install`).\n3) Generate client: `npx prisma generate`.\n4) Migrate DB: `npx prisma migrate dev --name init`.\n5) Run dev server: `npm run dev`.\n\n## Scripts\n- `npm run dev` – start Next.js dev server\n- `npm run prisma:migrate` – run migrations in dev\n- `npm run seed` – seed minimal roles/data (TODO)\n\n## Folders\n- `app/` – App Router pages & API routes\n- `src/lib/` – shared libraries (prisma, auth, rbac)\n- `src/services/` – domain services (audit, matter, evidence, ai, sos, messaging)\n- `prisma/` – Prisma schema and migrations\n- `scripts/` – seeds and utilities\n\n## RBAC\nRoles: CLIENT, ADVOCATE, FIRM_MEMBER, FIRM_ADMIN, REVIEWER, ADMIN, COMPLIANCE_ADMIN, SUPER_ADMIN.\n\n## Notes\n- AI output is locked behind counsel validation; export must check `DraftStatus.APPROVED`.\n- Discovery is neutral (no rankings/reviews); rotation is deterministic.\n- Evidence uploads hashed on ingest; originals vs working copies modeled.\n- Platform does not process client-lawyer fees; only subscriptions.\n*** End Patchיצן to=functions.apply_patch marker not right? Patch uses newline escapes; but okay since not quoting. Let's apply.﻿
+# LexSovereign
+
+Advocate-first safety and workflow OS.
+
+Tech stack: Next.js (App Router) + TypeScript + Tailwind + Prisma + Postgres + NextAuth.
+
+## Quick Start
+
+1. Copy `.env.example` to `.env.local` and set:
+   - `DATABASE_URL`
+   - `NEXTAUTH_SECRET`
+2. Install dependencies:
+   - `npm install`
+3. Generate Prisma client:
+   - `npm run prisma:generate`
+4. Run migrations in development:
+   - `npm run prisma:migrate`
+5. Start the app:
+   - `npm run dev`
+
+## Scripts
+
+- `npm run dev` - Start Next.js dev server
+- `npm run build` - Build production bundle
+- `npm run lint` - Run ESLint
+- `npm run check:links` - Validate internal app links against existing routes
+- `npm run check:frontend` - Run front-end baseline checks (`lint` + `check:links`)
+- `npm run prisma:generate` - Generate Prisma client
+- `npm run prisma:migrate` - Run Prisma dev migrations
+- `npm run prisma:studio` - Open Prisma Studio
+- `npm run seed` - Run seed script
+
+## Front-End QA Checklist
+
+Run this before merging front-end changes:
+
+1. `npm run check:frontend` passes.
+2. Auth flows are verified:
+   - Sign in error handling is visible.
+   - Sign up validation and API error messaging are visible.
+3. Intake flow is verified:
+   - Anonymous and non-client users see guard states.
+   - Client users can submit and continue.
+4. Dashboard and navigation are verified:
+   - Header adapts for signed-out and signed-in users.
+   - Sign out works and redirects correctly.
+5. No dead-end routes:
+   - Dashboard cards and primary CTAs resolve to existing pages.
+
+## Folder Overview
+
+- `app/` - App Router pages, layouts, and API routes
+- `src/lib/` - Shared libraries (`auth`, `prisma`, RBAC helpers)
+- `src/services/` - Domain services (`matter`, `evidence`, `ai`, etc.)
+- `prisma/` - Prisma schema and migrations
+- `scripts/` - Project utility scripts
+
+## RBAC Roles
+
+`CLIENT`, `ADVOCATE`, `FIRM_MEMBER`, `FIRM_ADMIN`, `REVIEWER`, `ADMIN`, `COMPLIANCE_ADMIN`, `SUPER_ADMIN`.
