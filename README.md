@@ -26,6 +26,8 @@ Tech stack: Next.js (App Router) + TypeScript + Tailwind + Prisma + Postgres + N
 - `npm run check:links` - Validate internal app links against existing routes
 - `npm run check:frontend` - Run front-end baseline checks (`lint` + `check:links`)
 - `npm run check:backend` - Run lightweight backend smoke checks against a running local server
+- `npm run check:backend:integration` - Run auth/RBAC/ownership integration matrix against a running local server
+- `npm run check:ci` - Run static CI quality gate (`lint` + `tsc --noEmit` + `build`)
 - `npm run prisma:generate` - Generate Prisma client
 - `npm run prisma:migrate` - Run Prisma dev migrations
 - `npm run prisma:studio` - Open Prisma Studio
@@ -76,3 +78,11 @@ Run this before merging front-end changes:
   - `GET/POST /api/intake`
   - `GET/POST /api/sos`
   - `GET/PATCH /api/sos/:id`
+
+## Contract Freeze
+
+- Contract version: `v1` (frozen in B6)
+- Backward compatibility rule:
+  - Do not change response envelope keys (`ok`, `data`, `error`, `code`, `details`, `page`) without versioning.
+  - New fields are additive only.
+  - Mutation route permission changes must include an integration-matrix update.

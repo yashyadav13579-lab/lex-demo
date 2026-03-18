@@ -10,6 +10,8 @@
     "check:links": "node scripts/check-internal-links.mjs",
     "check:frontend": "npm run lint && npm run check:links",
     "check:backend": "node scripts/smoke-backend.mjs",
+    "check:backend:integration": "node scripts/integration-auth-rbac.mjs",
+    "check:ci": "npm run lint && npx tsc --noEmit && npm run build",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",

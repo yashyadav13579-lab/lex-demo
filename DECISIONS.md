@@ -34,3 +34,6 @@
 - B5: Added secured detail-mutation routes for matter/draft/evidence/SOS to make update/delete flows explicit and enforce ownership-aware RBAC on every mutation path.
 - B5: Matter `DELETE /api/matters/:id` is implemented as soft archive (`status=ARCHIVED`) to preserve legal/audit traceability by default.
 - B5: Adopted detail-route read behavior where inaccessible resources return `404` (not `403`) to keep resource existence private across tenant/role boundaries.
+- B6: Froze backend API contract at `v1` with envelope compatibility rules (additive changes only, no key renames/removals without version bump).
+- B6: Added integration matrix script (`check:backend:integration`) covering sign-up, credential auth, RBAC denial, ownership isolation, mutation authorization, and paginated envelope assertions.
+- B6: Added GitHub Actions CI gate with Postgres service, Prisma schema sync (`db push`), static quality checks, smoke checks, and integration matrix checks against a live app instance.
