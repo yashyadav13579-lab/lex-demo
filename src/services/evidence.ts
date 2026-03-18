@@ -51,14 +51,14 @@ export async function logEvidenceAccess(params: {
   evidenceItemId: string
   userId?: string
   eventType: AccessEventType
-  meta?: Record<string, unknown>
+  meta?: Record<string, unknown> | unknown[] | string | number | boolean | null
 }) {
   return prisma.evidenceAccessLog.create({
     data: {
       evidenceItemId: params.evidenceItemId,
       userId: params.userId,
       eventType: params.eventType,
-      meta: params.meta
+      meta: params.meta as never
     }
   })
 }

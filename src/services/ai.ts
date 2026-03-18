@@ -21,7 +21,7 @@ export async function generateDraft(params: {
       template: params.template,
       content,
       status: 'NEEDS_REVIEW',
-      aiMeta: params.context
+      aiMeta: params.context as never
     }
   })
   return draft

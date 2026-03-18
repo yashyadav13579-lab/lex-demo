@@ -6,7 +6,7 @@ export async function createSOSIncident(params: {
   latitude?: number
   longitude?: number
 }) {
-  return prisma.sosIncident.create({
+  return prisma.sOSIncident.create({
     data: {
       advocateId: params.advocateId,
       description: params.description,
@@ -18,7 +18,7 @@ export async function createSOSIncident(params: {
 }
 
 export async function closeSOSIncident(id: string, closedById?: string) {
-  return prisma.sosIncident.update({
+  return prisma.sOSIncident.update({
     where: { id },
     data: {
       status: 'CLOSED',

@@ -25,7 +25,7 @@ export async function recordAudit(params: {
       action: params.action,
       entityType: params.entityType,
       entityId: params.entityId,
-      meta: params.meta
+      meta: params.meta as never
     }
   })
 }

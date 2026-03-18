@@ -161,6 +161,8 @@ model User {
   clientProfile   ClientProfile?
   availability    LawyerAvailability?
   verificationRequests VerificationRequest[]
+  mattersAsPrimaryAdvocate Matter[] @relation("MatterPrimaryAdvocate")
+  mattersAsClient     Matter[] @relation("MatterClient")
   // matters owned handled via assignments/primaryAdvocate/client relations
   draftDocuments  DraftDocument[]
   messages        Message[] @relation("UserMessages")
@@ -175,6 +177,24 @@ model User {
   lawfulProcessRequests LawfulProcessRequest[]
   panelsCreated   Panel[]   @relation("PanelsCreated")
   panelMemberships PanelMembership[]
+  feedbackAsAdvocate ServiceFeedback[] @relation("ServiceFeedbackAdvocate")
+  feedbackAsClient   ServiceFeedback[] @relation("ServiceFeedbackClient")
+  accounts            Account[]
+  sessions            Session[]
+  verificationReviews VerificationRequest[] @relation("VerificationReviewer")
+  intakeSubmissions   IntakeSubmission[] @relation("IntakeClient")
+  matterAssignments   MatterAssignment[] @relation("MatterAssignee")
+  matterAssignmentsAdded MatterAssignment[] @relation("AssignmentAdder")
+  matterNotesAuthored MatterNote[]
+  matterEventsCreated MatterEvent[] @relation("MatterEventCreator")
+  matterTasksAssigned MatterTask[] @relation("MatterTaskAssignee")
+  evidenceUploaded    EvidenceItem[] @relation("EvidenceUploader")
+  evidenceAccessEvents EvidenceAccessLog[] @relation("EvidenceAccessUser")
+  draftReviewsGiven   DraftReview[] @relation("DraftReviewer")
+  draftApprovalsGiven DraftApproval[] @relation("DraftApprover")
+  collaborationSent   CollaborationRequest[] @relation("CollabFrom")
+  collaborationReceived CollaborationRequest[] @relation("CollabTo")
+  correctionsReviewed ProfileCorrectionRequest[] @relation("CorrectionReviewer")
 }
 
 model Account {
@@ -304,8 +324,8 @@ model IntakeSubmission {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  client User @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  matter Matter? @relation(fields: [matterId], references: [id])
+  client User @relation("IntakeClient", fields: [clientId], references: [id], onDelete: Cascade)
+  matter Matter? @relation("MatterIntakes", fields: [matterId], references: [id])
   answers IntakeAnswer[]
   documents IntakeDocument[]
 }
@@ -338,15 +358,14 @@ model Matter {
   primaryAdvocateId String?
   clientId        String?
   firmId          String?
-  intakeId        String?
   proBono         Boolean      @default(false)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  primaryAdvocate User? @relation(fields: [primaryAdvocateId], references: [id])
-  client          User? @relation(fields: [clientId], references: [id])
+  primaryAdvocate User? @relation("MatterPrimaryAdvocate", fields: [primaryAdvocateId], references: [id])
+  client          User? @relation("MatterClient", fields: [clientId], references: [id])
   firm            Firm? @relation(fields: [firmId], references: [id])
-  intake          IntakeSubmission? @relation(fields: [intakeId], references: [id])
+  intakeSubmissions IntakeSubmission[] @relation("MatterIntakes")
   assignments     MatterAssignment[]
   parties         MatterParty[]
   notes           MatterNote[]
@@ -355,6 +374,9 @@ model Matter {
   evidenceItems   EvidenceItem[]
   drafts          DraftDocument[]
   threads         MessageThread[]
+  collaborationRequests CollaborationRequest[]
+  complaints      Complaint[]
+  serviceFeedbacks ServiceFeedback[]
 }
 
 model MatterParty {
@@ -376,7 +398,7 @@ model MatterAssignment {
   createdAt DateTime @default(now())
 
   matter Matter @relation(fields: [matterId], references: [id], onDelete: Cascade)
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation("MatterAssignee", fields: [userId], references: [id], onDelete: Cascade)
   addedBy User? @relation("AssignmentAdder", fields: [addedById], references: [id])
 }
 
@@ -402,7 +424,7 @@ model MatterEvent {
   createdAt   DateTime @default(now())
 
   matter Matter @relation(fields: [matterId], references: [id], onDelete: Cascade)
-  createdBy User? @relation(fields: [createdById], references: [id])
+  createdBy User? @relation("MatterEventCreator", fields: [createdById], references: [id])
 }
 
 model MatterTask {
@@ -415,7 +437,7 @@ model MatterTask {
   createdAt DateTime   @default(now())
 
   matter Matter @relation(fields: [matterId], references: [id], onDelete: Cascade)
-  assignee User? @relation(fields: [assigneeId], references: [id])
+  assignee User? @relation("MatterTaskAssignee", fields: [assigneeId], references: [id])
 }
 
 model EvidenceItem {
@@ -433,7 +455,7 @@ model EvidenceItem {
   createdAt     DateTime        @default(now())
 
   matter    Matter @relation(fields: [matterId], references: [id], onDelete: Cascade)
-  uploadedBy User  @relation(fields: [uploadedById], references: [id])
+  uploadedBy User  @relation("EvidenceUploader", fields: [uploadedById], references: [id])
   versions  EvidenceVersion[]
   accessLogs EvidenceAccessLog[]
 }
@@ -457,7 +479,7 @@ model EvidenceAccessLog {
   createdAt      DateTime @default(now())
 
   evidence EvidenceItem @relation(fields: [evidenceItemId], references: [id], onDelete: Cascade)
-  user     User?        @relation(fields: [userId], references: [id])
+  user     User?        @relation("EvidenceAccessUser", fields: [userId], references: [id])
 }
 
 model DraftDocument {
@@ -488,7 +510,7 @@ model DraftReview {
   createdAt DateTime @default(now())
 
   draft    DraftDocument @relation(fields: [draftId], references: [id], onDelete: Cascade)
-  reviewer User          @relation(fields: [reviewerId], references: [id])
+  reviewer User          @relation("DraftReviewer", fields: [reviewerId], references: [id])
 }
 
 model DraftApproval {
@@ -499,7 +521,7 @@ model DraftApproval {
   approvedAt DateTime @default(now())
 
   draft    DraftDocument @relation(fields: [draftId], references: [id], onDelete: Cascade)
-  approver User          @relation(fields: [approverId], references: [id])
+  approver User          @relation("DraftApprover", fields: [approverId], references: [id])
 }
 
 model MessageThread {
@@ -625,6 +647,7 @@ model SubscriptionPlan {
   interval    String
   features    String[] @default([])
   active      Boolean  @default(true)
+  subscriptions Subscription[]
 }
 
 model Subscription {
@@ -697,7 +720,7 @@ model ServiceFeedback {
   status      ComplaintStatus @default(OPEN)
   createdAt   DateTime @default(now())
 
-  advocate User @relation(fields: [advocateId], references: [id])
-  client   User @relation(fields: [clientId], references: [id])
+  advocate User @relation("ServiceFeedbackAdvocate", fields: [advocateId], references: [id])
+  client   User @relation("ServiceFeedbackClient", fields: [clientId], references: [id])
   matter   Matter? @relation(fields: [matterId], references: [id])
 }
